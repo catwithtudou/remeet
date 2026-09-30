@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    name: macOS tests and package
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Audit public files
+        run: |
+          git show --format= --check HEAD
+          python3 scripts/audit-public.py
+      - name: Toolchain
+        run: |
+          sw_vers
+          swift --version
+          python3 --version
+      - name: Swift tests
+        run: ./scripts/test.sh
+      - name: Python and reload tests
+        env:
+          REMEET_TEST_BINARY: .build/debug/Remeet
+        run: python3 -m unittest discover -s Tests -v
+      - name: Build and verify App ZIP
+        run: |
+          test "$(uname -m)" = arm64
+          ./scripts/build-app.sh release
+          ./scripts/package-release.sh
+          cd build/releases
+          shasum -a 256 -c *.sha256
+      - name: Upload tested package
+        uses: actions/upload-artifact@v7
+        with:
+          name: Remeet-arm64-${{ github.sha }}
+          path: build/releases/*
+          if-no-files-found: error
+          retention-days: 14

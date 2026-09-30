@@ -1,5 +1,7 @@
 # 回见 · Remeet
 
+[![CI](https://github.com/catwithtudou/remeet/actions/workflows/ci.yml/badge.svg)](https://github.com/catwithtudou/remeet/actions/workflows/ci.yml)
+
 **和过去的想法，再见一面。**
 
 回见是一款 Mac 笔记回顾工具。让读书摘录、工作想法和留给自己的问题，在刘海旁再次出现。
@@ -10,9 +12,9 @@
 
 ## 安装
 
-当前安装包面向 Apple Silicon（M 系列芯片），要求 macOS 14 或更新版本。下载附件将随本仓库首个 Release 提供。
+**[下载回见 App](https://github.com/catwithtudou/remeet/releases)** · Apple Silicon（M 系列芯片）· macOS 14 或更新版本
 
-1. 从本仓库 **Releases** 下载以 `Remeet-` 开头的 App ZIP 附件。不要下载 **Source code**，那是源码。
+1. 在 [Releases](https://github.com/catwithtudou/remeet/releases) 的 **Assets** 中下载以 `Remeet-` 开头的 App ZIP 附件。不要下载 **Source code**，那是源码。
 2. 解压，将 **Remeet.app** 拖入「应用程序」，然后打开。
 3. 点击菜单栏的小芽图标开始使用；回见不会常驻 Dock。
 
@@ -69,6 +71,14 @@
 
 可选的 **回见助手 Skill（`remeet`）** 可以帮助整理文本、Markdown 和 flomo 导出，再加入回见。普通使用不需要安装 Skill。
 
+在终端运行，按提示选择使用的 Agent：
+
+```sh
+npx skills add catwithtudou/remeet --skill remeet -g
+```
+
+安装命令需要 Node.js 22.20+，内容导入需要 Python 3.10+。安装后在 Agent 中调用：
+
 > 使用 $remeet，把这些笔记加入回见，保留原文和来源，跳过重复内容。
 
 这是一次性导入，目前只导入文字，不连接笔记账号或自动同步。安装方式与详细操作见 [笔记导入指南](docs/CONTENT_IMPORT.md)。
@@ -88,5 +98,7 @@
 ## 开发与贡献
 
 构建与测试见 [开发说明](docs/DEVELOPMENT.md)，提交改动前请阅读 [贡献指南](CONTRIBUTING.md)。
+
+遇到问题可提交 [Issue](https://github.com/catwithtudou/remeet/issues)，附上 App 版本、macOS 版本和复现步骤；截图请使用示例内容。
 
 灵感来自 flomo 的[每日回顾](https://help.flomoapp.com/advance/lucky.html)：让记录多一次被看见。回见是独立项目。

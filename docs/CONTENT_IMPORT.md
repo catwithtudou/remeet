@@ -10,7 +10,13 @@
 4. 按已授权范围导入，取得备份位置与应用重载结果。
 5. 从 App 的“我的内容”搜索并选中笔记，点击“预览这条”查看；也可从菜单“立即回顾”展示当前随机条目。暂停时先恢复展示。
 
-Skill 随源码位于 `skills/remeet`，需要支持本机文件访问的 Agent 和 Python 3.10+。从源码本地安装的方法见[开发说明](DEVELOPMENT.md#skill-本地安装)；公开安装命令将在仓库发布后提供。普通 App 用户无需安装 Skill 或 Python。
+Skill 需要支持本机文件访问的 Agent 和 Python 3.10+。通过 Node.js 22.20+ 的终端安装：
+
+```sh
+npx skills add catwithtudou/remeet --skill remeet -g
+```
+
+只安装到 Codex 时可加 `--agent codex`；安装后刷新 Agent 的 Skill 列表，再调用 `$remeet`。不使用 Node.js 时，可下载源码后按[本地安装说明](DEVELOPMENT.md#skill-本地安装)安装。普通 App 用户无需安装 Skill、Node.js 或 Python。
 
 ### 来源与格式
 

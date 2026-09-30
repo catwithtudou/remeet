@@ -30,4 +30,4 @@ description: 帮助用户安装、启动和使用回见（Remeet），将笔记�
 
 App 不依赖 Agent、Python 或 Node.js。当前内容 helper 使用 Python 3.10+ 标准库；先检查现有运行环境，缺少时说明阻塞，不把 App 本身说成需要 Python。
 
-从源码安装可使用仓库的 `scripts/install-skill.py`。公开安装命令将在仓库发布并验证后提供；没有真实下载入口时，不提供占位安装地址。
+公开安装命令为 `npx skills add catwithtudou/remeet --skill remeet -g`，安装器需要 Node.js 22.20+；从源码安装可使用仓库的 `scripts/install-skill.py`。App 下载入口为 https://github.com/catwithtudou/remeet/releases ，下载 App ZIP 附件，不使用 Source code 压缩包作为安装包。

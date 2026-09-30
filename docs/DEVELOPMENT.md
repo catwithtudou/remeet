@@ -13,7 +13,7 @@ REMEET_APP_OUTPUT="$PWD/build/debug-candidate/Remeet.app" ./scripts/build-app.sh
 
 Release 副本在签名前移除调试符号；SwiftPM 原始产物保留供调试。当前为本机架构构建和 ad-hoc 签名，不生成 Universal 包，也不进行 Developer ID 签名或公证。分发步骤见[发布说明](RELEASING.md)。
 
-完整 Xcode 可打开 `Remeet.xcodeproj`，选择 `Remeet` / `My Mac`，或运行：
+`Remeet.xcodeproj` 是 Xcode 工程目录，记录源码、资源、构建配置和运行方案，是开发所需的共享文件。普通用户下载 Release 的 App 即可，无需打开它。完整 Xcode 可打开该工程，选择 `Remeet` / `My Mac`，或运行：
 
 ```sh
 xcodebuild -project Remeet.xcodeproj -scheme Remeet \
@@ -40,6 +40,8 @@ Swift 使用 Swift Testing，脚本补齐部分 CLT 版本所需的 framework �
 Python 3.10+ 测试使用标准库、临时目录和构造数据。`REMEET_TEST_BINARY` 启用独立数据目录/偏好域的重载验证；不设置时跳过此项。这里必须使用 Debug 二进制，Release 不接受隔离环境变量。
 
 自动化覆盖数据校验、保存冲突、标签、调度、窗口几何及导入/恢复。真实刘海位置、焦点、锁屏唤醒、不同显示器和下载安装体验仍需实机检查。
+
+[GitHub Actions](https://github.com/catwithtudou/remeet/actions/workflows/ci.yml) 在推送到 main 或提交 PR 时，运行公开文件审计、Swift/Python 测试和 Release 打包检查。成功后保留与提交 SHA 对应的 App ZIP 产物 14 天；面向用户的长期下载位于 [Releases](https://github.com/catwithtudou/remeet/releases)。
 
 ## 隔离运行
 
@@ -104,7 +106,7 @@ build/Remeet.app/Contents/MacOS/Remeet --reload-content '/实际数据目录/quo
 python3 scripts/install-skill.py
 ```
 
-已有同名目录时脚本拒绝覆盖，先比较并保留旧版本再更新。其他 Agent 可按其 Skills 约定加载该目录。公开仓库就绪并验证后，再提供对应的 `npx skills add` 命令；当前不发布占位安装地址。App 本身不依赖 Python、Node.js 或 Agent。
+已有同名目录时脚本拒绝覆盖，先比较并保留旧版本再更新。其他 Agent 可按其 Skills 约定加载该目录，也可使用 README 中的 `npx skills add catwithtudou/remeet --skill remeet -g` 命令。App 本身不依赖 Python、Node.js 或 Agent。
 
 ## 图标与文档配图
 
