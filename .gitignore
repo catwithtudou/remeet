@@ -1,0 +1,42 @@
+.build/
+build/
+.swiftpm/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+# Local import working material must not enter a future public repository.
+imports/
+import-backups/
+# User content, local configuration and release/signing material.
+quotes.json
+exports/
+private/
+.local/
+.env
+.env.*
+!.env.example
+*.log
+*.app/
+*.dmg
+*.zip
+*.tar
+*.tar.gz
+*.p12
+*.pfx
+*.pem
+*.key
+*.cer
+*.mobileprovision
+*.provisionprofile
+import-runs/
+# Local planning, agent context and machine-specific acceptance records.
+/CONTEXT.md
+/context.md
+/Remeet_MVP_SPEC.md
+/docs/product/
+/docs/MANUAL_ACCEPTANCE.md
+/docs/RELEASE_REVIEW.md

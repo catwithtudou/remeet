@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="660" viewBox="0 0 1280 660" role="img" aria-labelledby="title desc">
+  <title id="title">回见 · Remeet — 和过去的想法，再见一面</title>
+  <desc id="desc">概览示意：将笔记加入回见，按自己的节奏，在 Mac 刘海旁再次阅读。内容保存在本机，无需账号。</desc>
+  <defs>
+    <linearGradient id="paper" x2="1" y2="1"><stop stop-color="#f8f8f0"/><stop offset="1" stop-color="#e9f3ec"/></linearGradient>
+    <linearGradient id="screen" x2="0.9" y2="1"><stop stop-color="#d7e9dd"/><stop offset="1" stop-color="#f1ede0"/></linearGradient>
+    <linearGradient id="note" x2="0" y2="1"><stop stop-color="#c2f5d4"/><stop offset="1" stop-color="#66c9ab"/></linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="160%"><feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#254b3b" flood-opacity=".13"/></filter>
+    <g id="mark" transform="translate(0 100) scale(1 -1)">
+      <path d="M49 73 C46 92 62 99 76 97 C80 80 63 73 49 73Z" fill="#5cb885"/>
+      <path d="M25 13 C13 13 10 23 10 35 V55 C10 72 19 80 35 80 H65 C82 80 90 70 90 55 V35 C90 20 79 13 65 13 H43 C36 6 25 0 24 3Z" fill="url(#note)"/>
+      <g fill="#1f574d"><rect x="34" y="39" width="6" height="12" rx="3"/><rect x="61" y="39" width="6" height="12" rx="3"/></g>
+      <path d="M44 31 C47 26 54 26 57 31" fill="none" stroke="#1f574d" stroke-width="3" stroke-linecap="round"/>
+    </g>
+  </defs>
+  <rect width="1280" height="660" rx="28" fill="url(#paper)"/>
+  <g font-family="'PingFang SC','Microsoft YaHei',sans-serif">
+    <use href="#mark" transform="translate(56 50) scale(.55)"/>
+    <text x="124" y="88" font-size="27" font-weight="600" fill="#244c3e">回见 · Remeet</text>
+    <text x="66" y="205" font-size="52" font-weight="650" fill="#173e31">和过去的想法，</text>
+    <text x="66" y="278" font-size="52" font-weight="650" fill="#173e31">再见一面。</text>
+    <text x="68" y="333" font-size="21" fill="#567063">让笔记在刘海旁出现，</text>
+    <text x="68" y="368" font-size="21" fill="#567063">在日常工作里，多一次重读的机会。</text>
+    <g font-size="16" fill="#35614f">
+      <rect x="66" y="408" width="108" height="38" rx="19" fill="#fff" fill-opacity=".72"/>
+      <text x="120" y="433" text-anchor="middle">本地保存</text>
+      <rect x="186" y="408" width="108" height="38" rx="19" fill="#fff" fill-opacity=".72"/>
+      <text x="240" y="433" text-anchor="middle">无需账号</text>
+      <rect x="306" y="408" width="132" height="38" rx="19" fill="#fff" fill-opacity=".72"/>
+      <text x="372" y="433" text-anchor="middle">自定回顾节奏</text>
+    </g>
+    <g filter="url(#shadow)">
+      <rect x="660" y="98" width="548" height="352" rx="22" fill="#243a32"/>
+      <rect x="670" y="108" width="528" height="332" rx="14" fill="url(#screen)"/>
+      <path d="M670 362 Q814 254 953 352 T1198 320 V426 Q1198 440 1184 440 H684 Q670 440 670 426Z" fill="#adccb9" fill-opacity=".45"/>
+      <path d="M854 108 H1014 V124 Q1014 138 1000 138 H868 Q854 138 854 124Z" fill="#080b0a"/>
+      <path d="M732 108 H1136 V253 Q1136 275 1114 275 H754 Q732 275 732 253Z" fill="#080b0a"/>
+      <use href="#mark" transform="translate(746 114) scale(.24)"/>
+      <text x="779" y="132" fill="#b3bdb7" font-size="11">回顾中</text>
+      <text x="1043" y="132" fill="#d8e0db" font-size="17">↻</text>
+      <text x="1075" y="132" fill="#d8e0db" font-size="17">⚙</text>
+      <path d="M1110 129 l5 -5 l5 5" stroke="#d8e0db" stroke-width="1.5" fill="none"/>
+      <text x="754" y="180" font-size="20" fill="#fff">给自己一点空白，</text>
+      <text x="754" y="213" font-size="20" fill="#fff">想法才有地方生长。</text>
+      <text x="754" y="250" font-size="13" fill="#94a399">示例 · 日常笔记</text>
+      <rect x="705" y="310" width="178" height="8" rx="4" fill="#fff" fill-opacity=".6"/>
+      <rect x="705" y="330" width="242" height="8" rx="4" fill="#fff" fill-opacity=".38"/>
+      <rect x="705" y="350" width="215" height="8" rx="4" fill="#fff" fill-opacity=".38"/>
+      <path d="M636 450 H1232 L1248 465 Q1248 474 1232 474 H636 Q620 474 620 465Z" fill="#c8d3cb"/>
+      <path d="M875 450 H993 L985 457 H883Z" fill="#aebdb3"/>
+    </g>
+    <path d="M952 290 l5 19 l4 -7 l9 -2 Z" fill="#fff" stroke="#406b56" stroke-width="1.6"/>
+    <text x="978" y="310" fill="#4d6c5b" font-size="15">停留鼠标，继续阅读</text>
+    <line x1="66" y1="500" x2="1214" y2="500" stroke="#cbded0"/>
+    <g font-size="20" fill="#244c3e">
+      <text x="68" y="556"><tspan fill="#79a187" font-size="15">01</tspan><tspan dx="14">加入想重读的笔记</tspan></text>
+      <text x="475" y="556"><tspan fill="#79a187" font-size="15">02</tspan><tspan dx="14">设置适合自己的节奏</tspan></text>
+      <text x="898" y="556"><tspan fill="#79a187" font-size="15">03</tspan><tspan dx="14">在日常里再次遇见</tspan></text>
+      <path d="M365 549 h42 m-7 -6 l7 6 l-7 6 M793 549 h42 m-7 -6 l7 6 l-7 6" fill="none" stroke="#9ebcaa" stroke-width="1.5"/>
+    </g>
+    <text x="1210" y="617" text-anchor="end" fill="#7c9686" font-size="13">场景概览示意 · 展示内容为示例</text>
+  </g>
+</svg>

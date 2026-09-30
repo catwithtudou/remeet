@@ -1,0 +1,4 @@
+interface:
+  display_name: "回见 · Remeet 助手"
+  short_description: "辅助安装和使用回见，导入已有笔记、管理回顾内容，并排查加载与展示问题"
+  default_prompt: "使用 $remeet 帮我安装和使用回见，或把我提供的笔记预览后合并导入，保留原文并跳过重复。"
