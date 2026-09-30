@@ -1,0 +1,60 @@
+name: Website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - '.github/workflows/pages.yml'
+      - 'scripts/audit-public.py'
+  pull_request:
+    paths:
+      - 'website/**'
+      - '.github/workflows/pages.yml'
+      - 'scripts/audit-public.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Check website
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check public files and website
+        run: |
+          git show --format= --check HEAD
+          python3 scripts/audit-public.py
+          python3 website/check.py
+          node --check website/dist/site.js
+      - name: Upload website
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: website/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - name: Publish website
+        id: deployment
+        uses: actions/deploy-pages@v4

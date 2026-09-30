@@ -8,6 +8,8 @@
 
 本地保存 · 无需账号 · 自定义回顾节奏
 
+**[产品官网](https://catwithtudou.github.io/remeet/)** · [使用指南](https://catwithtudou.github.io/remeet/guide.html)
+
 ![回见概览：笔记在刘海旁出现，停留鼠标继续阅读](docs/images/overview.svg)
 
 ## 安装

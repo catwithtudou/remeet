@@ -18,6 +18,9 @@ REVIEWED_ASSETS = {
     'docs/images/my-content.jpg': '084ee49ff159d66f5dcb5626d051dc87363aa34675c0919f5728f0ee5426644f',
     'docs/images/recall.jpg': '169f06806c63c4c33e6e89a507b8149cf181871159def26f3972b0afb283f632',
     'docs/images/settings.jpg': 'e35cf243c07f2bbd558fe4872378e14d23b85a53c94a2c1e7ddc4d611f4fb566',
+    'website/dist/assets/my-content.jpg': '084ee49ff159d66f5dcb5626d051dc87363aa34675c0919f5728f0ee5426644f',
+    'website/dist/assets/recall.jpg': '169f06806c63c4c33e6e89a507b8149cf181871159def26f3972b0afb283f632',
+    'website/dist/assets/settings.jpg': 'e35cf243c07f2bbd558fe4872378e14d23b85a53c94a2c1e7ddc4d611f4fb566',
 }
 RULES = {
     'personal absolute path': re.compile(r'/(?:Users|home)/[A-Za-z0-9_.-]+/'),
