@@ -5,7 +5,7 @@ app_dir="${REMEET_APP_OUTPUT:-$PWD/build/Remeet.app}"
 version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_dir/Contents/Info.plist")"
 architecture="$(lipo -archs "$app_dir/Contents/MacOS/Remeet" | tr ' ' '-')"
 output_dir="$PWD/build/releases"
-archive="$output_dir/Remeet-$version-$architecture-local-test.zip"
+archive="$output_dir/Remeet-$version-$architecture.zip"
 if [[ -e "$archive" || -e "$archive.sha256" ]]; then
   echo "Already exists; preserve the prior artifact: $archive" >&2
   exit 1
@@ -23,4 +23,4 @@ mkdir -p "$output_dir"
 ditto -c -k --sequesterRsrc --keepParent "$app_dir" "$archive"
 (cd "$output_dir" && shasum -a 256 "$(basename "$archive")" > "$(basename "$archive").sha256")
 echo "$archive"
-echo 'Local test package only; Developer ID signing/notarization is not performed.'
+echo 'Developer ID signing/notarization is not performed; disclose this in the release notes.'

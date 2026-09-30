@@ -23,12 +23,12 @@ export REMEET_APP_OUTPUT="$PWD/build/release-candidate/Remeet.app"
 ./scripts/package-release.sh
 ```
 
-输出目录必须尚不存在，重复构建时更换目录名。脚本验证本地签名完整性、检查二进制构建路径，并生成 `build/releases/Remeet-<版本>-<架构>-local-test.zip` 及其 `.sha256` 文件。`local-test` 保留当前未公证构建的标识；ZIP 可作为明确标注状态的测试版附件。脚本不公证或自动上传。
+输出目录必须尚不存在，重复构建时更换目录名。脚本验证本地签名完整性、检查二进制构建路径，并生成 `build/releases/Remeet-<版本>-<架构>.zip` 及其 `.sha256` 文件。测试版状态使用 GitHub 预发布标记，签名与公证状态写在 Release 说明中。脚本不公证或自动上传。
 
 发布前解压 ZIP，核对版本与文件内容，并从归档目录验证校验值：
 
 ```sh
-shasum -a 256 -c Remeet-<版本>-<架构>-local-test.zip.sha256
+shasum -a 256 -c Remeet-<版本>-<架构>.zip.sha256
 ```
 
 ## Release 内容

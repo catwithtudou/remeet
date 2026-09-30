@@ -58,7 +58,7 @@ class ReleaseScriptTests(unittest.TestCase):
                     self.binary.unlink()
                 else:
                     self.binary.write_bytes(data)
-                archive = self.root / f'build/releases/Remeet-{label}-arm64-local-test.zip'
+                archive = self.root / f'build/releases/Remeet-{label}-arm64.zip'
                 result = self.run_script('package-release.sh')
                 if label == 'clean':
                     self.assertEqual(result.returncode, 0, result.stderr)
