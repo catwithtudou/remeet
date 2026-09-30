@@ -102,3 +102,5 @@ npx skills add catwithtudou/remeet --skill remeet -g
 遇到问题可提交 [Issue](https://github.com/catwithtudou/remeet/issues)，附上 App 版本、macOS 版本和复现步骤；截图请使用示例内容。
 
 灵感来自 flomo 的[每日回顾](https://help.flomoapp.com/advance/lucky.html)：让记录多一次被看见。回见是独立项目。
+
+本项目采用 [MIT 许可证](LICENSE)。
