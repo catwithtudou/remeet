@@ -340,7 +340,7 @@ struct NativeWindowTests {
         }
         let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
         defer { model.shutdown() }
-        try model.saveContent([Quote(text: "原文")], expectedFileData: nil)
+        _ = try model.saveContent([Quote(text: "原文")], expectedFileData: nil)
         let editor = ContentEditorSession(model: model)
         editor.load()
         var prompted = false
