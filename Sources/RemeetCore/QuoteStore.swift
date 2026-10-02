@@ -123,7 +123,7 @@ extension QuoteStore {
         public var errorDescription: String? {
             switch self {
             case .changedOnDisk:
-                "内容文件已被其他操作修改。请重新载入后再编辑，当前草稿尚未保存。"
+                "内容文件已被其他操作修改，当前草稿尚未保存。可先导出草稿，再重新载入后继续编辑。"
             case .backupFailed:
                 "无法创建或整理保存前备份，内容文件未写入。请检查数据目录是否可写，当前草稿尚未保存。"
             }

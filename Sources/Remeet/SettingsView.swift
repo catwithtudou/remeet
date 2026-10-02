@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 #if SWIFT_PACKAGE
 import RemeetCore
@@ -339,6 +340,7 @@ final class ContentEditorSession: ObservableObject {
     @Published private(set) var loaded = false
     @Published var message: String?
     @Published private(set) var failure: String?
+    @Published private(set) var draftExportResult: Result<URL, Error>?
     private var baseline: [Quote] = []
     private var fileData: Data?
     var dirty: Bool { drafts.map(\.quote) != baseline }
@@ -361,6 +363,22 @@ final class ContentEditorSession: ObservableObject {
         } catch {
             failure = "保存失败：\(error.localizedDescription)"
             return false
+        }
+    }
+
+    func exportDrafts() {
+        guard loaded else { return }
+        draftExportResult = Result {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+            // Keep blank/duplicate entries and body whitespace; save normalization would lose edits.
+            let data = try encoder.encode(drafts.map(\.quote))
+            let directory = model.store.fileURL.deletingLastPathComponent()
+                .appendingPathComponent("draft-exports", isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let url = directory.appendingPathComponent("Remeet-draft-\(UUID().uuidString).json")
+            try data.write(to: url, options: .withoutOverwriting)
+            return url
         }
     }
 
@@ -522,12 +540,30 @@ struct ContentEditorView: View {
             }
             Divider()
             VStack(alignment: .leading, spacing: 8) {
-                if let failure = editor.failure {
-                    Text(failure).foregroundStyle(.red).font(.callout)
-                } else if editor.dirty {
-                    Text("有未保存的修改 · 切换笔记会保留草稿").foregroundStyle(.secondary).font(.callout)
-                } else if let message = editor.message {
-                    Text(message).foregroundStyle(.secondary).font(.callout)
+                HStack {
+                    if let failure = editor.failure {
+                        Text(failure).foregroundStyle(.red).font(.callout)
+                    } else if editor.dirty {
+                        Text("有未保存的修改 · 切换笔记会保留草稿").foregroundStyle(.secondary).font(.callout)
+                    } else if let message = editor.message {
+                        Text(message).foregroundStyle(.secondary).font(.callout)
+                    }
+                    if editor.loaded && editor.dirty {
+                        Spacer()
+                        Button("导出草稿", action: editor.exportDrafts).fixedSize()
+                    }
+                }
+                if let result = editor.draftExportResult {
+                    switch result {
+                    case .success(let url):
+                        HStack {
+                            Text("草稿副本已另存；之后的修改需重新导出。")
+                                .font(.caption).foregroundStyle(.secondary)
+                            Button("查看文件") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                        }
+                    case .failure(let error):
+                        Text("草稿导出失败：\(error.localizedDescription)").foregroundStyle(.red).font(.callout)
+                    }
                 }
                 if model.settings.isPaused {
                     Text("回顾展示已暂停，可从菜单栏或设置恢复。").font(.caption).foregroundStyle(.secondary)

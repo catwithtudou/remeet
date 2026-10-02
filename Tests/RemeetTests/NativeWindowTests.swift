@@ -5,6 +5,105 @@ import Testing
 
 @Suite(.serialized) @MainActor
 struct NativeWindowTests {
+    @Test func conflictingDraftExportPreservesAllEntriesAndDoesNotResolveTheConflict() throws {
+        _ = NSApplication.shared
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let suite = "Remeet.draft-export-tests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.set(false, forKey: "hoverPresent")
+        defaults.set(false, forKey: "showIndicator")
+        let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
+        defer {
+            model.shutdown()
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let original = [Quote(text: "原文"), Quote(text: "待删除")]
+        _ = try model.saveContent(original, expectedFileData: nil)
+        model.start()
+        let due = model.nextRecallDate
+        let editor = ContentEditorSession(model: model)
+        editor.load()
+        editor.selectedID = editor.drafts[1].id
+        editor.deleteSelected()
+        editor.drafts[0].text = "  中文草稿\n  保留缩进 🌱\n"
+        editor.drafts[0].source = "来源一"
+        editor.drafts[0].tagInput = "阅读，工作"
+        editor.drafts.append(QuoteDraft(Quote(text: editor.drafts[0].text, source: "来源二", tags: ["另一标签"])))
+        editor.drafts.append(QuoteDraft(Quote(text: " \n", source: "仅来源", tags: ["待补正文"])))
+        editor.searchText = "无匹配结果"
+        editor.selectSearchResult()
+        #expect(editor.filteredDrafts.isEmpty)
+        let expected = editor.drafts.map(\.quote)
+        let ids = editor.drafts.map(\.id)
+        let external = Data(#"[{"text":"外部新增","tags":["新标签"]}]"#.utf8)
+        try external.write(to: model.store.fileURL)
+        #expect(!editor.save())
+        let conflict = try #require(editor.failure)
+
+        editor.exportDrafts()
+        let url = try #require(editor.draftExportResult).get()
+        let exported = try Data(contentsOf: url)
+        // Use the raw decoder: QuoteStore.decode intentionally filters blank and duplicate bodies.
+        #expect(try JSONDecoder().decode([Quote].self, from: exported) == expected)
+        #expect(url.deletingLastPathComponent().lastPathComponent == "draft-exports")
+        #expect(editor.drafts.map(\.id) == ids)
+        #expect(editor.drafts[0].tagInput == "阅读，工作")
+        #expect(editor.selectedID == nil && editor.searchText == "无匹配结果")
+        #expect(editor.dirty && editor.canUndoDelete)
+        #expect(editor.failure == conflict)
+        #expect(try Data(contentsOf: model.store.fileURL) == external)
+        #expect(model.store.quotes == original)
+        #expect(model.nextRecallDate == due && !model.panel.isPresented)
+        #expect(try model.store.backups().isEmpty)
+        #expect(!editor.prepareToClose { .cancel })
+        #expect(!editor.save()) // Export must not replace the editor's file baseline.
+
+        editor.exportDrafts()
+        let secondURL = try #require(editor.draftExportResult).get()
+        #expect(secondURL != url)
+        #expect(try Data(contentsOf: url) == exported)
+        editor.load()
+        #expect(!editor.dirty)
+        #expect(editor.drafts.map(\.text) == ["外部新增"])
+        #expect(try Data(contentsOf: secondURL) == exported)
+        #expect(try #require(editor.draftExportResult).get() == secondURL)
+    }
+
+    @Test func draftExportFailureKeepsDraftUndoAndExistingFile() throws {
+        _ = NSApplication.shared
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let suite = "Remeet.draft-export-failure.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
+        defer {
+            model.shutdown()
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let original = try model.saveContent([Quote(text: "保留")], expectedFileData: nil)
+        let editor = ContentEditorSession(model: model)
+        editor.load()
+        editor.deleteSelected() // Exporting a deliberate empty draft must remain possible.
+        let blocked = directory.appendingPathComponent("draft-exports")
+        try Data("not a directory".utf8).write(to: blocked)
+        editor.exportDrafts()
+        let failedExport = try #require(editor.draftExportResult)
+        #expect(throws: (any Error).self) { try failedExport.get() }
+        #expect(editor.dirty && editor.canUndoDelete)
+        #expect(editor.drafts.isEmpty)
+        #expect(try Data(contentsOf: model.store.fileURL) == original.fileData)
+        #expect(model.store.quotes == original.quotes)
+        #expect(try Data(contentsOf: blocked) == Data("not a directory".utf8))
+        try FileManager.default.removeItem(at: blocked)
+        editor.exportDrafts()
+        let url = try #require(editor.draftExportResult).get()
+        #expect(try JSONDecoder().decode([Quote].self, from: Data(contentsOf: url)).isEmpty)
+        #expect(editor.dirty && editor.canUndoDelete)
+        editor.undoDelete()
+        #expect(editor.drafts.map(\.quote) == original.quotes)
+    }
+
     @Test func deletedDraftsUndoInOrderAndBackupRecoveryRemainsAnExplicitSave() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
