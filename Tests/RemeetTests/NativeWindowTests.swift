@@ -5,6 +5,68 @@ import Testing
 
 @Suite(.serialized) @MainActor
 struct NativeWindowTests {
+    @Test func saveWarningsProtectAllDraftsAndCloseUsesTheSameConfirmation() throws {
+        _ = NSApplication.shared
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let suite = "Remeet.save-warning-tests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.set(false, forKey: "hoverPresent")
+        defaults.set(false, forKey: "showIndicator")
+        let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
+        defer {
+            model.shutdown()
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let initial = try model.saveContent([Quote(text: "A"), Quote(text: "待删除")], expectedFileData: nil)
+        let editor = ContentEditorSession(model: model)
+        editor.load()
+        editor.selectedID = editor.drafts.last?.id
+        editor.deleteSelected()
+        editor.drafts[0].source = "保留的来源"
+        editor.drafts.append(QuoteDraft(Quote(text: " A\n", source: "被忽略的来源")))
+        editor.drafts[1].tagInput = "待提交的标签"
+        editor.drafts.append(QuoteDraft(Quote(text: " \n", source: "没有正文但有来源")))
+        editor.searchText = "无匹配结果"
+        editor.selectSearchResult()
+        let before = editor.drafts.map(\.quote)
+        let ids = editor.drafts.map(\.id)
+        var warnings = 0
+        let canceled = editor.save { quotes, discarded in
+            warnings += 1
+            #expect(quotes == before)
+            #expect(discarded == [1, 2])
+            #expect(quotes[1].tags == ["待提交的标签"])
+            return false
+        }
+        #expect(!canceled)
+        #expect(warnings == 1)
+        #expect(editor.drafts.map(\.id) == ids && editor.drafts.map(\.quote) == before)
+        #expect(editor.dirty && editor.canUndoDelete)
+        #expect(editor.searchText == "无匹配结果" && editor.selectedID == nil)
+        #expect(try Data(contentsOf: model.store.fileURL) == initial.fileData)
+        #expect(model.store.quotes == initial.quotes)
+        #expect(try model.store.backups().isEmpty)
+        #expect(!editor.prepareToClose(confirmDiscarded: { _, _ in false }, decide: { .save }))
+        #expect(editor.dirty)
+        // Confirming an older preview must not save changes made while its modal loop was running.
+        #expect(!editor.save { _, _ in editor.drafts[0].source = "确认期间变化"; return true })
+        #expect(try Data(contentsOf: model.store.fileURL) == initial.fileData)
+        #expect(editor.failure?.contains("草稿已变化") == true)
+        let closed = editor.prepareToClose(confirmDiscarded: { _, discarded in
+            #expect(discarded == [1, 2])
+            return true
+        }, decide: { .save })
+        #expect(closed)
+        let saved = try model.store.editorSnapshot()
+        #expect(saved.quotes == [Quote(text: "A", source: "确认期间变化")])
+        #expect(!editor.dirty && !editor.canUndoDelete)
+        #expect(try Data(contentsOf: #require(model.store.backups().first).url) == initial.fileData)
+        editor.drafts[0].text = "普通编辑"
+        #expect(editor.save { _, _ in Issue.record("不丢弃条目的保存不应要求确认"); return false })
+        #expect(model.store.quotes.first?.text == "普通编辑")
+    }
+
     @Test func conflictingDraftExportPreservesAllEntriesAndDoesNotResolveTheConflict() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -38,7 +100,7 @@ struct NativeWindowTests {
         let ids = editor.drafts.map(\.id)
         let external = Data(#"[{"text":"外部新增","tags":["新标签"]}]"#.utf8)
         try external.write(to: model.store.fileURL)
-        #expect(!editor.save())
+        #expect(!editor.save(confirmDiscarded: { _, _ in true }))
         let conflict = try #require(editor.failure)
 
         editor.exportDrafts()
@@ -57,7 +119,7 @@ struct NativeWindowTests {
         #expect(model.nextRecallDate == due && !model.panel.isPresented)
         #expect(try model.store.backups().isEmpty)
         #expect(!editor.prepareToClose { .cancel })
-        #expect(!editor.save()) // Export must not replace the editor's file baseline.
+        #expect(!editor.save(confirmDiscarded: { _, _ in true })) // Export must not replace the file baseline.
 
         editor.exportDrafts()
         let secondURL = try #require(editor.draftExportResult).get()

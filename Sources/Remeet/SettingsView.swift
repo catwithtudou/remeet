@@ -355,15 +355,54 @@ final class ContentEditorSession: ObservableObject {
     }
 
     @discardableResult
-    func save() -> Bool {
+    func save(confirmDiscarded: (([Quote], [Int]) -> Bool)? = nil) -> Bool {
+        let quotes = drafts.map(\.quote)
+        let discarded = QuoteStore.normalize(quotes).discardedIndices
+        if !discarded.isEmpty,
+           !(confirmDiscarded ?? Self.confirmDiscardedQuotes)(quotes, discarded) { return false }
+        // A modal confirmation runs an event loop; never save an unreviewed replacement draft.
+        guard quotes == drafts.map(\.quote) else {
+            failure = "草稿已变化，请重新检查后保存。"
+            return false
+        }
         do {
-            apply(try model.saveContent(drafts.map(\.quote), expectedFileData: fileData))
+            apply(try model.saveContent(quotes, expectedFileData: fileData))
             message = "已保存，回顾内容已更新。"
             return true
         } catch {
             failure = "保存失败：\(error.localizedDescription)"
             return false
         }
+    }
+
+    private static func confirmDiscardedQuotes(_ quotes: [Quote], _ discarded: [Int]) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "有 \(discarded.count) 条内容不会保存"
+        alert.informativeText = "空白正文会被忽略；同正文只保留列表中的第一条及其来源、标签。以下条目的来源和标签不会合并，可返回编辑或先导出草稿。"
+        alert.addButton(withTitle: "返回编辑")
+        alert.addButton(withTitle: "确认忽略并保存")
+        alert.buttons[0].keyEquivalent = "\u{1b}"
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 480, height: 260))
+        scroll.hasVerticalScroller = true
+        let text = NSTextView(frame: scroll.contentView.bounds)
+        text.isEditable = false
+        text.isVerticallyResizable = true
+        text.autoresizingMask = [.width]
+        text.textContainer?.widthTracksTextView = true
+        text.font = .systemFont(ofSize: 13)
+        text.string = discarded.map { index in
+            let quote = quotes[index]
+            let blank = quote.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return """
+            第 \(index + 1) 条 · \(blank ? "空白正文" : "重复正文")
+            正文：\(blank ? "（空白）" : quote.text)
+            来源：\(quote.source ?? "（无）")
+            标签：\(quote.tags.isEmpty ? "（无）" : quote.tags.joined(separator: "、"))
+            """
+        }.joined(separator: "\n\n")
+        scroll.documentView = text
+        alert.accessoryView = scroll
+        return alert.runModal() == .alertSecondButtonReturn
     }
 
     func exportDrafts() {
@@ -383,11 +422,12 @@ final class ContentEditorSession: ObservableObject {
     }
 
     /// Both window close and app termination use the same save/conflict policy.
-    func prepareToClose(decide: () -> CloseDecision) -> Bool {
+    func prepareToClose(confirmDiscarded: (([Quote], [Int]) -> Bool)? = nil,
+                        decide: () -> CloseDecision) -> Bool {
         guard dirty else { return true }
         switch decide() {
         case .cancel: return false
-        case .save: return save()
+        case .save: return save(confirmDiscarded: confirmDiscarded)
         case .discard:
             deletedDrafts = []
             drafts = []

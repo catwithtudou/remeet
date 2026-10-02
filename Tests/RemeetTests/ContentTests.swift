@@ -8,6 +8,19 @@ import Testing
     #expect(result == [Quote(text: "你好 🌱", source: "第一条"), Quote(text: "另一段\n内容")])
 }
 
+@Test func normalizationReportsEveryDiscardedEntryInOriginalOrder() throws {
+    let input = [Quote(text: " A\n", source: "保留来源", tags: ["保留标签"]),
+                 Quote(text: "A", source: "重复来源", tags: ["不合并"]),
+                 Quote(text: " \n", source: "空白条目的来源", tags: ["空白标签"]),
+                 Quote(text: "B"), Quote(text: "\tA", source: "第三份来源")]
+    let result = QuoteStore.normalize(input)
+    #expect(result.discardedIndices == [1, 2, 4])
+    #expect(result.quotes == [Quote(text: "A", source: "保留来源", tags: ["保留标签"]), Quote(text: "B")])
+    #expect(try QuoteStore.decode(JSONEncoder().encode(input)) == result.quotes)
+    #expect(QuoteStore.normalize(result.quotes).discardedIndices.isEmpty)
+    #expect(QuoteStore.normalize([]).quotes.isEmpty)
+}
+
 @Test(arguments: [#"{}"#, #"[{"text":1}]"#, #"[{"source":"缺少正文"}]"#,
                   #"[{"text":"有效"},{"text":"下一条","source":null}]"#,
                   #"[{"text":"有效","tags":null}]"#, #"[{"text":"有效","tags":"工作"}]"#,

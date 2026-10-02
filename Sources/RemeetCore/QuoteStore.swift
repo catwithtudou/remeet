@@ -36,12 +36,23 @@ public final class QuoteStore {
         let raw: [Quote]
         do { raw = try JSONDecoder().decode([Quote].self, from: data) }
         catch { throw ContentError.invalidFormat }
+        return normalize(raw).quotes
+    }
+
+    /// Shared by file loading, saving and the editor's pre-save warning.
+    public static func normalize(_ raw: [Quote]) -> (quotes: [Quote], discardedIndices: [Int]) {
         var seen = Set<String>()
-        return raw.compactMap { quote in
+        var quotes: [Quote] = []
+        var discarded: [Int] = []
+        for (index, quote) in raw.enumerated() {
             let text = quote.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty, seen.insert(text).inserted else { return nil }
-            return Quote(text: text, source: quote.source, tags: quote.tags)
+            guard !text.isEmpty, seen.insert(text).inserted else {
+                discarded.append(index)
+                continue
+            }
+            quotes.append(Quote(text: text, source: quote.source, tags: quote.tags))
         }
+        return (quotes, discarded)
     }
 
     public enum ContentError: LocalizedError {
@@ -146,7 +157,7 @@ extension QuoteStore {
         guard current == expectedFileData else { throw SaveError.changedOnDisk }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        let normalized = try Self.decode(encoder.encode(draft))
+        let normalized = Self.normalize(draft).quotes
         let data = try encoder.encode(normalized)
         if let current, current != data { try backUp(current) }
         let latest = FileManager.default.fileExists(atPath: fileURL.path)
