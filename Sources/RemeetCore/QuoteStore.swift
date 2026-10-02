@@ -78,15 +78,55 @@ public struct QuoteSelection {
 }
 
 extension QuoteStore {
+    public struct Backup: Identifiable {
+        public let url: URL
+        public let date: Date
+        public var id: URL { url }
+    }
+
+    private var backupDirectory: URL {
+        fileURL.deletingLastPathComponent().appendingPathComponent("editor-backups", isDirectory: true)
+    }
+
+    public func backups() throws -> [Backup] {
+        guard FileManager.default.fileExists(atPath: backupDirectory.path) else { return [] }
+        return try FileManager.default.contentsOfDirectory(at: backupDirectory,
+            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey])
+            .filter { $0.lastPathComponent.hasPrefix("quotes-") && $0.pathExtension == "json" }
+            .compactMap { url in
+                let values = try url.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey])
+                guard values.isRegularFile == true, let date = values.contentModificationDate else { return nil }
+                return Backup(url: url, date: date)
+            }
+            .sorted { $0.date > $1.date }
+    }
+
+    private func backUp(_ data: Data) throws {
+        do {
+            try FileManager.default.createDirectory(at: backupDirectory, withIntermediateDirectories: true)
+            let url = backupDirectory.appendingPathComponent("quotes-\(UUID().uuidString).json")
+            try data.write(to: url, options: .withoutOverwriting)
+            // Keep the new backup even if the system clock has moved backwards.
+            for backup in try backups().filter({ $0.url.lastPathComponent != url.lastPathComponent }).dropFirst(9) {
+                try FileManager.default.removeItem(at: backup.url)
+            }
+        } catch { throw SaveError.backupFailed }
+    }
+
     public struct EditorSnapshot {
         public let quotes: [Quote]
         public let fileData: Data?
     }
 
     public enum SaveError: LocalizedError {
-        case changedOnDisk
+        case changedOnDisk, backupFailed
         public var errorDescription: String? {
-            "内容文件已被其他操作修改。请重新载入后再编辑，当前草稿尚未保存。"
+            switch self {
+            case .changedOnDisk:
+                "内容文件已被其他操作修改。请重新载入后再编辑，当前草稿尚未保存。"
+            case .backupFailed:
+                "无法创建或整理保存前备份，内容文件未写入。请检查数据目录是否可写，当前草稿尚未保存。"
+            }
         }
     }
 
@@ -108,6 +148,10 @@ extension QuoteStore {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         let normalized = try Self.decode(encoder.encode(draft))
         let data = try encoder.encode(normalized)
+        if let current, current != data { try backUp(current) }
+        let latest = FileManager.default.fileExists(atPath: fileURL.path)
+            ? try Data(contentsOf: fileURL) : nil
+        guard latest == expectedFileData else { throw SaveError.changedOnDisk }
         try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: fileURL, options: .atomic)
         quotes = normalized

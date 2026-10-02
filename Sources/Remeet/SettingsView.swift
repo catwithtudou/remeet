@@ -247,6 +247,8 @@ final class ContentEditorSession: ObservableObject {
     @Published var selectedID: UUID?
     @Published var searchText = ""
     @Published var tagFilter = TagFilter.all
+    @Published private var deletedDrafts: [(draft: QuoteDraft, index: Int)] = []
+    var canUndoDelete: Bool { !deletedDrafts.isEmpty }
     var availableTags: [String] {
         Array(Set(drafts.flatMap { $0.quote.tags })).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
@@ -289,10 +291,40 @@ final class ContentEditorSession: ObservableObject {
 
     func deleteSelected() {
         guard let index = drafts.firstIndex(where: { $0.id == selectedID }) else { return }
+        deletedDrafts.append((drafts[index], index))
         drafts.remove(at: index)
         selectedID = drafts.isEmpty ? nil : drafts[min(index, drafts.count - 1)].id
         selectSearchResult()
         message = nil
+    }
+
+    func undoDelete() {
+        guard let deleted = deletedDrafts.popLast() else { return }
+        drafts.insert(deleted.draft, at: min(deleted.index, drafts.count))
+        searchText = ""
+        tagFilter = .all
+        selectedID = deleted.draft.id
+        message = nil
+    }
+
+    /// Stage recovery against the existing file baseline; saving still detects external changes.
+    @discardableResult
+    func loadBackup(_ backup: QuoteStore.Backup) -> Bool {
+        guard loaded else { return false }
+        do {
+            let quotes = try QuoteStore.decode(Data(contentsOf: backup.url))
+            drafts = quotes.map(QuoteDraft.init)
+            selectedID = drafts.first?.id
+            searchText = ""
+            tagFilter = .all
+            deletedDrafts = []
+            failure = nil
+            message = dirty ? "备份已载入为草稿，检查后点击“保存并生效”。" : "备份与当前内容一致，无需保存。"
+            return true
+        } catch {
+            failure = "无法载入备份：\(error.localizedDescription)"
+            return false
+        }
     }
 
     func selectSearchResult() {
@@ -339,6 +371,7 @@ final class ContentEditorSession: ObservableObject {
         case .cancel: return false
         case .save: return save()
         case .discard:
+            deletedDrafts = []
             drafts = []
             selectedID = nil
             baseline = []
@@ -351,6 +384,7 @@ final class ContentEditorSession: ObservableObject {
     }
 
     private func apply(_ snapshot: QuoteStore.EditorSnapshot) {
+        deletedDrafts = []
         let selectedText = selectedDraft?.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let previousIndex = drafts.firstIndex { $0.id == selectedID } ?? 0
         drafts = snapshot.quotes.map(QuoteDraft.init)
@@ -368,6 +402,11 @@ struct ContentEditorView: View {
     @ObservedObject var model: RecallModel
     @ObservedObject var editor: ContentEditorSession
     @EditorState private var confirmReload = false
+    @EditorState private var showBackups = false
+    @EditorState private var backups: [QuoteStore.Backup] = []
+    @EditorState private var backupError: String?
+    @EditorState private var pendingBackup: QuoteStore.Backup?
+    @EditorState private var confirmBackup = false
 
     private func textBinding(_ id: UUID, _ key: WritableKeyPath<QuoteDraft, String>) -> Binding<String> {
         Binding(get: { editor.drafts.first { $0.id == id }?[keyPath: key] ?? "" },
@@ -383,6 +422,7 @@ struct ContentEditorView: View {
                 Text("我的内容").font(.title2.bold())
                 Text("\(editor.drafts.count) 条").foregroundStyle(.secondary)
                 Spacer()
+                Button("撤销删除", action: editor.undoDelete).disabled(!editor.canUndoDelete)
                 Button("新增一条", action: editor.addDraft).disabled(!editor.loaded)
                 Button("重新载入") {
                     if editor.dirty { confirmReload = true } else { editor.load() }
@@ -494,6 +534,9 @@ struct ContentEditorView: View {
                 }
                 HStack {
                     Button("打开数据目录") { model.openDataDirectory() }
+                    Button("恢复备份") {
+                        showBackups = true
+                    }.disabled(!editor.loaded)
                     Text("空白不保存，同正文去重。").font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     Button("保存并生效", action: { editor.save() })
@@ -506,6 +549,57 @@ struct ContentEditorView: View {
         .onAppear { if !editor.loaded { editor.load() } }
         .onChange(of: editor.searchText) { _, _ in editor.selectSearchResult() }
         .onChange(of: editor.tagFilter) { _, _ in editor.selectSearchResult() }
+        .sheet(isPresented: $showBackups) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("恢复备份").font(.title2.bold())
+                Text("保留最近 10 份 App 保存前备份。选择后先载入为草稿，检查后保存才会生效。")
+                    .foregroundStyle(.secondary)
+                if let backupError {
+                    Text(backupError).foregroundStyle(.red)
+                } else if backups.isEmpty {
+                    Text("暂无备份。修改已有内容并保存时会自动创建。")
+                } else {
+                    ScrollView {
+                        VStack(spacing: 12) {
+                            ForEach(backups) { backup in
+                                HStack {
+                                    Text(backup.date.formatted(date: .numeric, time: .standard))
+                                    Spacer()
+                                    Button("载入为草稿") {
+                                        pendingBackup = backup
+                                        if editor.dirty { confirmBackup = true }
+                                        else { editor.loadBackup(backup); showBackups = false }
+                                    }
+                                }
+                            }
+                        }
+                    }.frame(maxHeight: 300)
+                }
+                HStack {
+                    Spacer()
+                    Button("取消") { showBackups = false }.keyboardShortcut(.cancelAction)
+                }
+            }.padding(24).frame(width: 480)
+            .onAppear {
+                do {
+                    backups = try model.store.backups()
+                    backupError = nil
+                } catch {
+                    backups = []
+                    backupError = "无法读取备份：\(error.localizedDescription)"
+                }
+            }
+            .alert("放弃未保存的修改并载入备份？", isPresented: $confirmBackup, presenting: pendingBackup) { backup in
+                Button("取消", role: .cancel) { pendingBackup = nil }
+                Button("载入备份", role: .destructive) {
+                    editor.loadBackup(backup)
+                    pendingBackup = nil
+                    showBackups = false
+                }
+            } message: { _ in
+                Text("备份将替换当前草稿。内容文件仅在点击“保存并生效”后更新。")
+            }
+        }
         .alert("放弃未保存的修改并重新载入？", isPresented: $confirmReload) {
             Button("取消", role: .cancel) { }
             Button("重新载入", role: .destructive) { editor.load() }

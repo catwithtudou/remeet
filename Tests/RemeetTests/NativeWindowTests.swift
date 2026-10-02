@@ -5,6 +5,99 @@ import Testing
 
 @Suite(.serialized) @MainActor
 struct NativeWindowTests {
+    @Test func deletedDraftsUndoInOrderAndBackupRecoveryRemainsAnExplicitSave() throws {
+        _ = NSApplication.shared
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let suite = "Remeet.recovery-tests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.set(false, forKey: "hoverPresent")
+        defaults.set(false, forKey: "showIndicator")
+        let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
+        defer {
+            model.shutdown()
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let original = [Quote(text: "A", source: "来源", tags: ["阅读"]), Quote(text: "B"), Quote(text: "C")]
+        _ = try model.saveContent(original, expectedFileData: nil)
+        model.start()
+        let due = model.nextRecallDate
+        let editor = ContentEditorSession(model: model)
+        editor.load()
+        editor.drafts[1].tagInput = "未提交标签"
+        let deletedID = editor.drafts[1].id
+        editor.selectedID = deletedID
+        editor.deleteSelected() // B, then C.
+        editor.deleteSelected()
+        editor.drafts[0].source = "保留其他编辑"
+        editor.undoDelete()
+        editor.searchText = "不匹配"
+        editor.tagFilter = .tag("阅读")
+        editor.undoDelete()
+        #expect(editor.drafts.map(\.text) == ["A", "B", "C"])
+        #expect(editor.drafts[0].source == "保留其他编辑")
+        #expect(editor.selectedID == deletedID)
+        #expect(editor.selectedDraft?.tagInput == "未提交标签")
+        #expect(editor.searchText.isEmpty && editor.tagFilter == .all)
+        #expect(!editor.canUndoDelete)
+        editor.deleteSelected()
+        let blockedBackups = directory.appendingPathComponent("editor-backups")
+        try Data("blocked".utf8).write(to: blockedBackups)
+        #expect(!editor.save())
+        #expect(editor.dirty && editor.canUndoDelete)
+        #expect(model.store.quotes == original)
+        try FileManager.default.removeItem(at: blockedBackups)
+        #expect(editor.save())
+        #expect(!editor.canUndoDelete)
+        let changed = try model.store.editorSnapshot()
+        let backup = try #require(model.store.backups().first)
+        #expect(editor.loadBackup(backup))
+        #expect(editor.drafts.map(\.quote) == original)
+        #expect(editor.dirty)
+        #expect(try model.store.editorSnapshot().fileData == changed.fileData)
+        #expect(model.store.quotes == changed.quotes)
+        #expect(model.nextRecallDate == due)
+        #expect(!model.panel.isPresented)
+        #expect(!editor.prepareToClose { .cancel })
+        #expect(editor.save())
+        #expect(model.store.quotes == original)
+        // Recovery itself saves a backup of the content it replaces.
+        let recoveryBackup = try #require(model.store.backups().first)
+        #expect(try Data(contentsOf: recoveryBackup.url) == changed.fileData)
+        #expect(!editor.dirty)
+        #expect(model.nextRecallDate == due)
+        // Read through a new store so a successful in-memory update cannot hide a failed disk restore.
+        let reopened = QuoteStore(fileURL: model.store.fileURL)
+        #expect(try reopened.editorSnapshot().quotes == original)
+
+        editor.drafts[0].text = "保留草稿"
+        editor.selectedID = editor.drafts.last?.id
+        editor.deleteSelected()
+        let draftBeforeFailure = editor.drafts.map(\.quote)
+        let selectionBeforeFailure = editor.selectedID
+        try Data("[".utf8).write(to: backup.url)
+        #expect(!editor.loadBackup(backup))
+        #expect(editor.drafts.map(\.quote) == draftBeforeFailure)
+        #expect(editor.selectedID == selectionBeforeFailure)
+        #expect(editor.canUndoDelete)
+        #expect(editor.failure != nil)
+        // A backup can disappear while the picker is open; failure must also preserve the draft.
+        try FileManager.default.removeItem(at: backup.url)
+        #expect(!editor.loadBackup(backup))
+        #expect(editor.drafts.map(\.quote) == draftBeforeFailure)
+        #expect(editor.selectedID == selectionBeforeFailure)
+        #expect(editor.canUndoDelete)
+        #expect(editor.loadBackup(recoveryBackup))
+        #expect(!editor.canUndoDelete)
+        let external = Data(#"[{"text":"外部导入"}]"#.utf8)
+        try external.write(to: model.store.fileURL)
+        #expect(!editor.save())
+        #expect(editor.dirty)
+        #expect(try Data(contentsOf: model.store.fileURL) == external)
+        #expect(editor.drafts.map(\.quote) == changed.quotes)
+        #expect(model.store.quotes == original)
+    }
+
     @Test func tagsOrganizeDraftsWithoutFilteringTheRecallPool() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

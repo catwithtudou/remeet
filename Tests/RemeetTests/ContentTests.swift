@@ -166,3 +166,53 @@ func rejectsEntireInvalidFile(input: String) {
     #expect(store.quotes == snapshot.quotes)
     #expect(throws: (any Error).self) { try store.editorSnapshot() }
 }
+
+@Test func editorBackupsPreserveOriginalBytesAndKeepTenWithoutTouchingImports() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = QuoteStore(fileURL: directory.appendingPathComponent("quotes.json"))
+    #expect(try store.backups().isEmpty)
+    var snapshot = try store.save([Quote(text: "0", source: "来源", tags: ["阅读"])], expectedFileData: nil)
+    #expect(try store.backups().isEmpty)
+    let original = try #require(snapshot.fileData)
+    let imports = directory.appendingPathComponent("import-backups", isDirectory: true)
+    try FileManager.default.createDirectory(at: imports, withIntermediateDirectories: true)
+    let imported = imports.appendingPathComponent("quotes-import.json")
+    try original.write(to: imported)
+    snapshot = try store.save([Quote(text: "1")], expectedFileData: snapshot.fileData)
+    let first = try #require(store.backups().first)
+    #expect(try Data(contentsOf: first.url) == original)
+    #expect(try QuoteStore.decode(Data(contentsOf: first.url)) == [Quote(text: "0", source: "来源", tags: ["阅读"])])
+    _ = try store.save(snapshot.quotes, expectedFileData: snapshot.fileData)
+    #expect(try store.backups().count == 1)
+    for index in 2...14 {
+        snapshot = try store.save([Quote(text: String(index))], expectedFileData: snapshot.fileData)
+    }
+    let backups = try store.backups()
+    #expect(backups.count == 10)
+    let texts = try backups.flatMap { try QuoteStore.decode(Data(contentsOf: $0.url)).map(\.text) }
+    #expect(Set(texts) == Set((4...13).map(String.init)))
+    #expect(try Data(contentsOf: imported) == original)
+    #expect(try store.editorSnapshot().quotes == [Quote(text: "14")])
+}
+
+@Test func failedBackupAndSaveConflictLeaveDiskAndLivePoolIntact() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = QuoteStore(fileURL: directory.appendingPathComponent("quotes.json"))
+    let snapshot = try store.save([Quote(text: "保留")], expectedFileData: nil)
+    // A file at the backup-directory path reliably simulates failure even when running as root.
+    try Data("blocked".utf8).write(to: directory.appendingPathComponent("editor-backups"))
+    #expect(throws: QuoteStore.SaveError.backupFailed) {
+        try store.save([], expectedFileData: snapshot.fileData)
+    }
+    #expect(try Data(contentsOf: store.fileURL) == snapshot.fileData)
+    #expect(store.quotes == snapshot.quotes)
+    let external = Data(#"[{"text":"外部修改"}]"#.utf8)
+    try external.write(to: store.fileURL)
+    #expect(throws: QuoteStore.SaveError.changedOnDisk) {
+        try store.save([], expectedFileData: snapshot.fileData)
+    }
+    #expect(try Data(contentsOf: store.fileURL) == external)
+    #expect(store.quotes == snapshot.quotes)
+}
