@@ -5,6 +5,52 @@ import Testing
 
 @Suite(.serialized) @MainActor
 struct NativeWindowTests {
+    @Test(arguments: [false, true])
+    func externalChangesDuringSaveConfirmationPreserveDrafts(removeFile: Bool) throws {
+        _ = NSApplication.shared
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let suite = "Remeet.confirmation-conflict.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
+        defer {
+            model.shutdown()
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let original = try model.saveContent([Quote(text: "原文"), Quote(text: "待删除")], expectedFileData: nil)
+        let editor = ContentEditorSession(model: model)
+        editor.load()
+        editor.selectedID = editor.drafts.last?.id
+        editor.deleteSelected()
+        editor.drafts.append(QuoteDraft(Quote(text: "原文", source: "重复项来源")))
+        editor.drafts[1].tagInput = "未提交标签"
+        let drafts = editor.drafts.map(\.quote)
+        let ids = editor.drafts.map(\.id)
+        let external = Data(#"[{"text":"确认期间外部写入","tags":["外部"]}]"#.utf8)
+        var confirmations = 0
+        let closed = editor.prepareToClose(confirmDiscarded: { _, discarded in
+            confirmations += 1
+            #expect(discarded == [1])
+            #expect(throws: Never.self) {
+                if removeFile { try FileManager.default.removeItem(at: model.store.fileURL) }
+                else { try external.write(to: model.store.fileURL, options: .atomic) }
+            }
+            return true
+        }, decide: { .save })
+        #expect(!closed && confirmations == 1)
+        #expect(editor.failure?.contains("内容文件已被其他操作修改") == true)
+        #expect(editor.drafts.map(\.quote) == drafts && editor.drafts.map(\.id) == ids)
+        #expect(editor.dirty && editor.canUndoDelete)
+        #expect(model.store.quotes == original.quotes)
+        #expect(try model.store.backups().isEmpty)
+        editor.exportDrafts()
+        let exported = try #require(editor.draftExportResult).get()
+        #expect(try JSONDecoder().decode([Quote].self, from: Data(contentsOf: exported)) == drafts)
+        #expect(!editor.save(confirmDiscarded: { _, _ in true }))
+        if removeFile { #expect(!FileManager.default.fileExists(atPath: model.store.fileURL.path)) }
+        else { #expect(try Data(contentsOf: model.store.fileURL) == external) }
+    }
+
     @Test func saveWarningsProtectAllDraftsAndCloseUsesTheSameConfirmation() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
