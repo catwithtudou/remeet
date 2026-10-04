@@ -5,6 +5,195 @@ import Testing
 
 @Suite(.serialized) @MainActor
 struct NativeWindowTests {
+    @Test func jsonImportCancelConfirmAndRepeatPreserveContentAndSchedule() throws {
+        _ = NSApplication.shared
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let suite = "Remeet.import-tests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.set(false, forKey: "hoverPresent")
+        defaults.set(false, forKey: "showIndicator")
+        let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
+        defer {
+            model.shutdown()
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let original = Data(#"[ { "text": "已有", "source": "旧来源", "tags": ["旧标签"] } ]"#.utf8)
+        try model.store.initializeIfMissing(sample: original)
+        model.start()
+        let nextDate = model.nextRecallDate
+        let selected = model.currentQuote
+        let editor = ContentEditorSession(model: model)
+        editor.load()
+        editor.searchText = "已有"
+        let ids = editor.drafts.map(\.id)
+        let source = directory.appendingPathComponent("incoming.json")
+        try original.write(to: source)
+        editor.previewImport(from: source)
+        #expect(editor.pendingImport?.preview.addedCount == 0)
+        #expect(!editor.confirmImport())
+        #expect(try Data(contentsOf: model.store.fileURL) == original)
+        #expect(try model.store.backups().isEmpty)
+        editor.cancelImport()
+        let input = Data(#"[{"text":"已有","source":"不覆盖"},{"text":" 新增 ","tags":["阅读"]},{"text":"新增","source":"不保留"},{"text":" "}]"#.utf8)
+        try input.write(to: source)
+        editor.previewImport(from: source)
+        let preview = try #require(editor.pendingImport)
+        #expect(preview.preview.addedCount == 1 && preview.preview.duplicateCount == 2)
+        #expect(try Data(contentsOf: model.store.fileURL) == original)
+        #expect(try model.store.backups().isEmpty)
+        editor.cancelImport()
+        #expect(editor.pendingImport == nil && !editor.dirty)
+        #expect(editor.drafts.map(\.id) == ids && editor.searchText == "已有")
+        #expect(try model.store.backups().isEmpty)
+        editor.previewImport(from: source)
+        #expect(editor.confirmImport())
+        let expected = [Quote(text: "已有", source: "旧来源", tags: ["旧标签"]), Quote(text: "新增", tags: ["阅读"])]
+        #expect(model.store.quotes == expected && editor.drafts.map(\.quote) == expected)
+        #expect(try QuoteStore.decode(Data(contentsOf: model.store.fileURL)) == expected)
+        #expect(try Data(contentsOf: #require(model.store.backups().first).url) == original)
+        #expect(try Data(contentsOf: source) == input)
+        #expect(editor.pendingImport == nil && !editor.dirty)
+        #expect(editor.message?.contains("已导入 1 条") == true)
+        #expect(model.currentQuote == selected && model.nextRecallDate == nextDate && !model.panel.isPresented)
+        let saved = try Data(contentsOf: model.store.fileURL)
+        for data in [input, Data("[]".utf8), Data(#"[{"text":" "}]"#.utf8)] {
+            try data.write(to: source)
+            editor.previewImport(from: source)
+            #expect(editor.pendingImport?.preview.addedCount == 0)
+            #expect(!editor.confirmImport())
+            #expect(try Data(contentsOf: model.store.fileURL) == saved)
+            #expect(try model.store.backups().count == 1)
+            editor.cancelImport()
+        }
+    }
+
+    @Test(arguments: ["source-change", "source-delete", "target-change", "target-delete", "draft", "reload", "discard", "backup", "unreadable-target", "write-denied"])
+    func jsonImportFailuresRetainPreviewDraftsAndLivePool(reason: String) throws {
+        _ = NSApplication.shared
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let suite = "Remeet.import-failures.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.set(false, forKey: "showIndicator")
+        let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
+        defer {
+            model.shutdown()
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory.path)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let snapshot = try model.saveContent([Quote(text: "原文")], expectedFileData: nil)
+        let editor = ContentEditorSession(model: model)
+        editor.load()
+        let source = directory.appendingPathComponent("incoming.json")
+        try Data(#"[{"text":"新增"}]"#.utf8).write(to: source)
+        editor.previewImport(from: source)
+        let previewID = try #require(editor.pendingImport).id
+        let external = Data(#"[{"text":"外部新增"}]"#.utf8)
+        switch reason {
+        case "source-change": try external.write(to: source)
+        case "source-delete": try FileManager.default.removeItem(at: source)
+        case "target-change": try external.write(to: model.store.fileURL)
+        case "target-delete": try FileManager.default.removeItem(at: model.store.fileURL)
+        case "draft": editor.drafts[0].tagInput = "未保存标签"
+        case "reload":
+            try external.write(to: model.store.fileURL)
+            editor.load()
+        case "discard":
+            editor.drafts[0].text = "临时草稿"
+            #expect(editor.prepareToClose(decide: { .discard }))
+        case "backup": try Data("blocked".utf8).write(to: directory.appendingPathComponent("editor-backups"))
+        case "write-denied":
+            // Permit backup creation but deny the atomic replacement in the target's directory.
+            try FileManager.default.createDirectory(at: directory.appendingPathComponent("editor-backups"), withIntermediateDirectories: true)
+            try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: directory.path)
+        default:
+            try FileManager.default.removeItem(at: model.store.fileURL)
+            try FileManager.default.createDirectory(at: model.store.fileURL, withIntermediateDirectories: false)
+        }
+        let drafts = editor.drafts.map(\.quote)
+        let ids = editor.drafts.map(\.id)
+        #expect(!editor.confirmImport())
+        #expect(editor.importFailure != nil && editor.pendingImport?.id == previewID)
+        #expect(editor.drafts.map(\.quote) == drafts && editor.drafts.map(\.id) == ids)
+        #expect(model.store.quotes == snapshot.quotes)
+        if reason == "target-change" || reason == "reload" { #expect(try Data(contentsOf: model.store.fileURL) == external) }
+        else if reason == "target-delete" { #expect(!FileManager.default.fileExists(atPath: model.store.fileURL.path)) }
+        else if reason != "unreadable-target" { #expect(try Data(contentsOf: model.store.fileURL) == snapshot.fileData) }
+        if reason == "write-denied" {
+            #expect(try Data(contentsOf: #require(model.store.backups().first).url) == snapshot.fileData)
+        }
+        if reason == "backup" {
+            try FileManager.default.removeItem(at: directory.appendingPathComponent("editor-backups"))
+            #expect(editor.confirmImport())
+            #expect(model.store.quotes == snapshot.quotes + [Quote(text: "新增")])
+        }
+    }
+
+    @Test func jsonImportCreatesMissingTargetOnlyAfterConfirmation() throws {
+        _ = NSApplication.shared
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let suite = "Remeet.import-create.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.set(false, forKey: "showIndicator")
+        let model = RecallModel(dataDirectory: directory.appendingPathComponent("data"), userDefaults: defaults)
+        defer {
+            model.shutdown()
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let source = directory.appendingPathComponent("incoming.json")
+        try Data(#"[{"text":"首次导入","tags":["阅读"]}]"#.utf8).write(to: source)
+        let editor = ContentEditorSession(model: model)
+        editor.load()
+        editor.previewImport(from: source)
+        #expect(!FileManager.default.fileExists(atPath: model.store.fileURL.path))
+        #expect(editor.confirmImport())
+        #expect(try QuoteStore.decode(Data(contentsOf: model.store.fileURL)) == [Quote(text: "首次导入", tags: ["阅读"])])
+        #expect(try model.store.backups().isEmpty)
+    }
+
+    @Test func jsonImportRejectsDirtyInvalidAndStaleInputsWithoutLosingEdits() throws {
+        _ = NSApplication.shared
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let suite = "Remeet.import-guards.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.set(false, forKey: "showIndicator")
+        let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
+        defer {
+            model.shutdown()
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let saved = try model.saveContent([Quote(text: "保留"), Quote(text: "删除草稿")], expectedFileData: nil)
+        let editor = ContentEditorSession(model: model)
+        editor.load()
+        editor.selectedID = editor.drafts.last?.id
+        editor.deleteSelected()
+        editor.drafts[0].tagInput = "未提交"
+        let source = directory.appendingPathComponent("incoming.json")
+        try Data(#"[{"text":"新增"}]"#.utf8).write(to: source)
+        editor.previewImport(from: source)
+        #expect(editor.pendingImport == nil && editor.importFailure != nil)
+        #expect(editor.canUndoDelete && editor.dirty && editor.drafts[0].tagInput == "未提交")
+        #expect(try Data(contentsOf: model.store.fileURL) == saved.fileData)
+        editor.load()
+        let ids = editor.drafts.map(\.id)
+        for invalid in ["[", #"[{"text":"新增"},{"text":null}]"#] {
+            try Data(invalid.utf8).write(to: source)
+            editor.previewImport(from: source)
+            #expect(editor.pendingImport == nil && editor.importFailure != nil)
+            #expect(editor.drafts.map(\.id) == ids && !editor.dirty)
+        }
+        try Data(#"[{"text":"新增"}]"#.utf8).write(to: source)
+        try Data(#"[{"text":"外部更新"}]"#.utf8).write(to: model.store.fileURL)
+        editor.previewImport(from: source)
+        #expect(editor.pendingImport == nil && editor.importFailure != nil)
+        #expect(editor.drafts.map(\.id) == ids && model.store.quotes == saved.quotes)
+        #expect(try model.store.backups().isEmpty)
+    }
+
     @Test(arguments: [false, true])
     func externalChangesDuringSaveConfirmationPreserveDrafts(removeFile: Bool) throws {
         _ = NSApplication.shared

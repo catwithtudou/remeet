@@ -32,11 +32,41 @@ public final class QuoteStore {
     }
 
     public static func decode(_ data: Data) throws -> [Quote] {
+        normalize(try decodeRaw(data)).quotes
+    }
+
+    private static func decodeRaw(_ data: Data) throws -> [Quote] {
         guard String(data: data, encoding: .utf8) != nil else { throw ContentError.invalidEncoding }
         let raw: [Quote]
         do { raw = try JSONDecoder().decode([Quote].self, from: data) }
         catch { throw ContentError.invalidFormat }
-        return normalize(raw).quotes
+        return raw
+    }
+
+    public struct ImportPreview {
+        public enum Disposition: String { case added = "新增", duplicate = "重复，跳过", blank = "空白，跳过" }
+        public struct Entry {
+            public let quote: Quote
+            public let disposition: Disposition
+        }
+        public let entries: [Entry]
+        public let merged: [Quote]
+        public var addedCount: Int { entries.filter { $0.disposition == .added }.count }
+        public var duplicateCount: Int { entries.filter { $0.disposition == .duplicate }.count }
+        public var blankCount: Int { entries.filter { $0.disposition == .blank }.count }
+    }
+
+    /// Use the same normalization as saving; existing entries win over incoming metadata.
+    public static func previewImport(_ data: Data, existing: [Quote]) throws -> ImportPreview {
+        let incoming = try decodeRaw(data)
+        let result = normalize(existing + incoming)
+        let discarded = Set(result.discardedIndices)
+        let entries = incoming.enumerated().map { index, quote in
+            let blank = quote.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return ImportPreview.Entry(quote: quote, disposition: blank ? .blank
+                : discarded.contains(existing.count + index) ? .duplicate : .added)
+        }
+        return ImportPreview(entries: entries, merged: result.quotes)
     }
 
     /// Shared by file loading, saving and the editor's pre-save warning.
@@ -60,8 +90,8 @@ public final class QuoteStore {
         case invalidEncoding, invalidFormat
         var message: String {
             switch self {
-            case .invalidEncoding: "quotes.json 必须是 UTF-8 文本。"
-            case .invalidFormat: "quotes.json 格式错误：顶层须为数组，text 和可选 source 须为字符串，可选 tags 须为字符串数组。"
+            case .invalidEncoding: "内容 JSON 必须是 UTF-8 文本。"
+            case .invalidFormat: "内容 JSON 格式错误：顶层须为数组，text 和可选 source 须为字符串，可选 tags 须为字符串数组。"
             }
         }
     }

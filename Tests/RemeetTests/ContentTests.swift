@@ -8,6 +8,19 @@ import Testing
     #expect(result == [Quote(text: "你好 🌱", source: "第一条"), Quote(text: "另一段\n内容")])
 }
 
+@Test func importPreviewClassifiesEveryRowAndRetainsFirstMetadata() throws {
+    let existing = [Quote(text: "已有", source: "旧来源", tags: ["旧标签"])]
+    let data = Data(#"[{"text":" 已有\n","source":"不覆盖","tags":["不追加"]},{"text":" 新笔记 🌱 ","source":"首条","tags":[" 阅读 ","阅读",""]},{"text":"新笔记 🌱","source":"重复项"},{"text":" \n","tags":["空白"]}]"#.utf8)
+    let preview = try QuoteStore.previewImport(data, existing: existing)
+    #expect(preview.entries.map(\.disposition) == [.duplicate, .added, .duplicate, .blank])
+    #expect(preview.addedCount == 1 && preview.duplicateCount == 2 && preview.blankCount == 1)
+    #expect(preview.entries[3].quote.tags == ["空白"])
+    #expect(preview.merged == existing + [Quote(text: "新笔记 🌱", source: "首条", tags: ["阅读"])])
+    #expect(try QuoteStore.previewImport(Data("[]".utf8), existing: existing).merged == existing)
+    #expect(try QuoteStore.previewImport(JSONEncoder().encode(existing), existing: existing).addedCount == 0)
+    #expect(try QuoteStore.previewImport(data, existing: []).addedCount == 2)
+}
+
 @Test func normalizationReportsEveryDiscardedEntryInOriginalOrder() throws {
     let input = [Quote(text: " A\n", source: "保留来源", tags: ["保留标签"]),
                  Quote(text: "A", source: "重复来源", tags: ["不合并"]),
@@ -27,6 +40,11 @@ import Testing
                   #"[{"text":"有效","tags":["工作",1]}]"#, "["])
 func rejectsEntireInvalidFile(input: String) {
     #expect(throws: (any Error).self) { try QuoteStore.decode(Data(input.utf8)) }
+    #expect(throws: (any Error).self) { try QuoteStore.previewImport(Data(input.utf8), existing: []) }
+}
+
+@Test func importRejectsInvalidUTF8() {
+    #expect(throws: (any Error).self) { try QuoteStore.previewImport(Data([0xff, 0xfe]), existing: []) }
 }
 
 @Test func optionalTagsNormalizeAndSurviveStoreRoundTrip() throws {

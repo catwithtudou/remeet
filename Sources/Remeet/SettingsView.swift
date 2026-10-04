@@ -1,6 +1,7 @@
 import AppKit
 import ServiceManagement
 import SwiftUI
+import UniformTypeIdentifiers
 #if SWIFT_PACKAGE
 import RemeetCore
 #endif
@@ -368,6 +369,82 @@ final class ContentEditorSession: ObservableObject {
 
     init(model: RecallModel) { self.model = model }
 
+    struct PendingImport: Identifiable {
+        let id = UUID()
+        let url: URL
+        let sourceData: Data
+        let targetData: Data?
+        let existing: [Quote]
+        let preview: QuoteStore.ImportPreview
+    }
+    @Published private(set) var pendingImport: PendingImport?
+    @Published private(set) var importFailure: String?
+
+    func chooseImportFile() {
+        guard loaded, !dirty else {
+            importFailure = "请先保存修改，或导出草稿后重新载入，再导入 JSON。"
+            return
+        }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "预览导入"
+        if panel.runModal() == .OK, let url = panel.url { previewImport(from: url) }
+    }
+
+    func previewImport(from url: URL) {
+        pendingImport = nil
+        importFailure = nil
+        guard loaded, !dirty else {
+            importFailure = "请先保存修改，或导出草稿后重新载入，再导入 JSON。"
+            return
+        }
+        do {
+            let target = try model.store.editorSnapshot()
+            guard target.fileData == fileData else { throw QuoteStore.SaveError.changedOnDisk }
+            let data = try Data(contentsOf: url)
+            let preview = try QuoteStore.previewImport(data, existing: target.quotes)
+            pendingImport = PendingImport(url: url, sourceData: data, targetData: target.fileData,
+                                          existing: baseline, preview: preview)
+        } catch { importFailure = "无法预览导入：\(error.localizedDescription)" }
+    }
+
+    func cancelImport() {
+        pendingImport = nil
+        importFailure = nil
+    }
+
+    @discardableResult
+    func confirmImport() -> Bool {
+        guard let pending = pendingImport else { return false }
+        guard loaded, !dirty, baseline == pending.existing, fileData == pending.targetData else {
+            importFailure = "草稿或已载入内容已变化，请取消导入，处理当前修改后重新预览。"
+            return false
+        }
+        do {
+            guard try Data(contentsOf: pending.url) == pending.sourceData else {
+                importFailure = "导入文件已变化，请取消后重新选择文件并预览。"
+                return false
+            }
+            guard try model.store.editorSnapshot().fileData == pending.targetData else {
+                throw QuoteStore.SaveError.changedOnDisk
+            }
+            // A duplicate-only or empty import must not rewrite even noncanonical JSON.
+            guard pending.preview.addedCount > 0 else {
+                importFailure = "没有可新增的内容，内容文件未写入。"
+                return false
+            }
+            apply(try model.saveContent(pending.preview.merged, expectedFileData: pending.targetData))
+            message = "已导入 \(pending.preview.addedCount) 条，跳过重复 \(pending.preview.duplicateCount) 条、空白 \(pending.preview.blankCount) 条。"
+            cancelImport()
+            return true
+        } catch {
+            importFailure = "导入失败，预览已保留：\(error.localizedDescription)"
+            return false
+        }
+    }
+
     func load() {
         do {
             apply(try model.store.editorSnapshot())
@@ -503,6 +580,7 @@ struct ContentEditorView: View {
                 Spacer()
                 Button("撤销删除", action: editor.undoDelete).disabled(!editor.canUndoDelete)
                 Button("新增一条", action: editor.addDraft).disabled(!editor.loaded)
+                Button("导入 JSON") { editor.chooseImportFile() }.disabled(!editor.loaded)
                 Button("重新载入") {
                     if editor.dirty { confirmReload = true } else { editor.load() }
                 }
@@ -601,6 +679,9 @@ struct ContentEditorView: View {
             }
             Divider()
             VStack(alignment: .leading, spacing: 8) {
+                if let failure = editor.importFailure {
+                    Text(failure).foregroundStyle(.red).font(.callout)
+                }
                 HStack {
                     if let failure = editor.failure {
                         Text(failure).foregroundStyle(.red).font(.callout)
@@ -646,6 +727,9 @@ struct ContentEditorView: View {
         .onAppear { if !editor.loaded { editor.load() } }
         .onChange(of: editor.searchText) { _, _ in editor.selectSearchResult() }
         .onChange(of: editor.tagFilter) { _, _ in editor.selectSearchResult() }
+        .sheet(item: Binding(get: { editor.pendingImport }, set: { if $0 == nil { editor.cancelImport() } })) { pending in
+            ContentImportView(editor: editor, pending: pending)
+        }
         .sheet(isPresented: $showBackups) {
             VStack(alignment: .leading, spacing: 16) {
                 Text("恢复备份").font(.title2.bold())
@@ -701,5 +785,45 @@ struct ContentEditorView: View {
             Button("取消", role: .cancel) { }
             Button("重新载入", role: .destructive) { editor.load() }
         }
+    }
+}
+
+struct ContentImportView: View {
+    @ObservedObject var editor: ContentEditorSession
+    let pending: ContentEditorSession.PendingImport
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("导入 JSON 预览").font(.title2.bold())
+            Text(pending.url.lastPathComponent).lineLimit(2).textSelection(.enabled)
+            Text("新增 \(pending.preview.addedCount) 条 · 重复 \(pending.preview.duplicateCount) 条 · 空白 \(pending.preview.blankCount) 条")
+                .font(.headline)
+            Text("按去除首尾空白后的正文去重，保留已有条目或文件中第一条的来源和标签。确认后自动备份已有文件并合并生效。")
+                .font(.callout).foregroundStyle(.secondary)
+            if pending.preview.addedCount == 0 {
+                Text("没有可新增的内容，不会写入文件或创建备份。")
+            }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    ForEach(pending.preview.entries.indices, id: \.self) { index in
+                        let entry = pending.preview.entries[index]
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("第 \(index + 1) 条 · \(entry.disposition.rawValue)").font(.headline)
+                            Text(entry.disposition == .blank ? "（空白正文）" : entry.quote.text)
+                            Text("来源：\(entry.quote.source ?? "（无）")")
+                            Text("标签：\(entry.quote.tags.isEmpty ? "（无）" : entry.quote.tags.joined(separator: "、"))")
+                        }.frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
+                        Divider()
+                    }
+                }
+            }.frame(height: 260)
+            if let failure = editor.importFailure { Text(failure).foregroundStyle(.red).font(.callout) }
+            HStack {
+                Spacer()
+                Button("取消") { editor.cancelImport() }.keyboardShortcut(.cancelAction)
+                Button("确认合并并生效") { editor.confirmImport() }
+                    .disabled(pending.preview.addedCount == 0)
+            }
+        }.padding(24).frame(width: 520)
     }
 }
