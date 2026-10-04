@@ -14,7 +14,7 @@
 
 ## 安装
 
-**[下载回见 App](https://github.com/catwithtudou/remeet/releases)** · Apple Silicon（M 系列芯片）· macOS 14 或更新版本
+**[下载回见 App](https://github.com/catwithtudou/remeet/releases/tag/v0.2.17)** · Apple Silicon（M 系列芯片）· macOS 14 或更新版本
 
 1. 在 [Releases](https://github.com/catwithtudou/remeet/releases) 的 **Assets** 中下载以 `Remeet-` 开头的 App ZIP 附件。不要下载 **Source code**，那是源码。
 2. 解压，将 **Remeet.app** 拖入「应用程序」，然后打开。
