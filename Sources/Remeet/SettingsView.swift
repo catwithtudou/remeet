@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 import SwiftUI
 #if SWIFT_PACKAGE
 import RemeetCore
@@ -7,6 +8,7 @@ import RemeetCore
 struct SettingsView: View {
     @ObservedObject var model: RecallModel
     var openContentEditor: () -> Void
+    @StateObject private var loginItem = LoginItemController()
     @EditorState private var frequencyChoice = RecallFrequency.hourly
     @EditorState private var intervalText = "45"
     @EditorState private var intervalUnit = 1
@@ -71,6 +73,17 @@ struct SettingsView: View {
                 Button("我的内容", action: openContentEditor)
                 Text("放入想再读一遍的笔记、摘录或问题。")
                     .font(.caption).foregroundStyle(.secondary)
+            }
+            Section("启动") {
+                Toggle("登录时启动", isOn: Binding(get: { loginItem.isEnabled }, set: loginItem.setEnabled))
+                    .disabled(loginItem.status == .requiresApproval)
+                Text(loginItem.explanation).font(.caption).foregroundStyle(.secondary)
+                if let error = loginItem.errorMessage {
+                    Text(error).font(.caption).foregroundStyle(.red)
+                }
+                if loginItem.status == .requiresApproval || loginItem.status == .notFound || loginItem.errorMessage != nil {
+                    Button("打开系统登录项设置") { SMAppService.openSystemSettingsLoginItems() }
+                }
             }
             Section("回顾") {
                 Picker("回顾频率", selection: Binding(
@@ -206,10 +219,17 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 480, height: 680)
         .onAppear {
+            loginItem.refresh()
             frequencyChoice = model.settings.frequency
             intervalText = intervalString(Double(model.settings.customIntervalMinutes))
             readingText = String(model.settings.readingSeconds)
             customReading = !RecallSettings.readingOptions.contains(model.settings.readingSeconds)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            loginItem.refresh()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+            loginItem.refresh()
         }
         .onChange(of: intervalUnit) { old, _ in
             let minutes = Double(intervalText).flatMap { $0.isFinite ? $0 * Double(old) : nil }

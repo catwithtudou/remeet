@@ -96,6 +96,10 @@ App 修改已有文件前，将原始字节保存在同一数据目录的 `edito
 
 ### 调度与偏好
 
+源码开发版的「登录时启动」使用 [SMAppService.mainApp](https://developer.apple.com/documentation/servicemanagement/smappservice) 注册主 App，不新增 helper、LaunchAgent 或偏好键，也不在启动时自动注册。`LoginItemController` 每次操作后读取系统状态；只有 `enabled` 显示为开启，`requiresApproval` 显示为关闭并引导到系统登录项设置，不重复注册系统已禁用的项目。注册/取消失败显示错误并保留系统实际状态。设置页出现、窗口获得焦点、App 恢复活跃时重新读取状态。
+
+登录启动沿用现有启动流程，不主动展开卡片或恢复暂停，不改变已保存的内容和调度设置。自定义间隔仍从启动时重新起算。单元测试注入状态读写回调，避免更改测试机器的真实登录项；实际注册测试须使用独立 Bundle ID 并验证取消后为 `notRegistered`。真实登录后自动启动需另行验收，接口注册成功不等于该场景通过。
+
 `frequencyMinutes` 的 30/60/120 对应按本机时钟对齐的预设，0 表示自定义；`customIntervalMinutes` 范围为 1–1440，`readingSeconds` 为 1–3600。旧偏好默认值保持兼容。
 
 自定义间隔从启动或应用设置时起算，正常回调延迟不累积，睡眠恢复跳过错过的周期。时钟回退到起算点之前时重新起算；预设保留绝对时刻去重。手动回顾不改变定时计划。
