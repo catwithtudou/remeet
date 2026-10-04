@@ -75,7 +75,8 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("启动") {
-                Toggle("登录时启动", isOn: Binding(get: { loginItem.isEnabled }, set: loginItem.setEnabled))
+                Toggle("登录时启动", isOn: Binding(get: { loginItem.isEnabled },
+                    set: { value in loginItem.setEnabled(value) }))
                     .disabled(loginItem.status == .requiresApproval)
                 Text(loginItem.explanation).font(.caption).foregroundStyle(.secondary)
                 if let error = loginItem.errorMessage {
