@@ -363,6 +363,7 @@ final class ContentEditorSession: ObservableObject {
     @Published var message: String?
     @Published private(set) var failure: String?
     @Published private(set) var draftExportResult: Result<URL, Error>?
+    @Published private(set) var savedExportResult: Result<URL, Error>?
     private var baseline: [Quote] = []
     private var fileData: Data?
     var dirty: Bool { drafts.map(\.quote) != baseline }
@@ -501,6 +502,24 @@ final class ContentEditorSession: ObservableObject {
         scroll.documentView = text
         alert.accessoryView = scroll
         return alert.runModal() == .alertSecondButtonReturn
+    }
+
+    func exportSavedContent(chooseDestination: (() -> URL?)? = nil) {
+        guard loaded, let url = (chooseDestination ?? Self.chooseSavedExportDestination)() else { return }
+        savedExportResult = Result {
+            try model.store.exportSavedContent(to: url)
+            return url
+        }
+    }
+
+    private static func chooseSavedExportDestination() -> URL? {
+        let panel = NSSavePanel()
+        panel.title = "导出已保存内容"
+        panel.message = "导出磁盘上已保存的全部内容，不受筛选影响，也不包含未保存的草稿。"
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "Remeet-content.json"
+        panel.prompt = "导出"
+        return panel.runModal() == .OK ? panel.url : nil
     }
 
     func exportDrafts() {
@@ -707,6 +726,18 @@ struct ContentEditorView: View {
                         Text("草稿导出失败：\(error.localizedDescription)").foregroundStyle(.red).font(.callout)
                     }
                 }
+                if let result = editor.savedExportResult {
+                    switch result {
+                    case .success(let url):
+                        HStack {
+                            Text("已保存内容已导出，不含未保存草稿；之后的修改需重新导出。")
+                                .font(.caption).foregroundStyle(.secondary)
+                            Button("查看导出文件") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                        }
+                    case .failure(let error):
+                        Text("已保存内容导出失败：\(error.localizedDescription)").foregroundStyle(.red).font(.callout)
+                    }
+                }
                 if model.settings.isPaused {
                     Text("回顾展示已暂停，可从菜单栏或设置恢复。").font(.caption).foregroundStyle(.secondary)
                 }
@@ -715,6 +746,7 @@ struct ContentEditorView: View {
                     Button("恢复备份") {
                         showBackups = true
                     }.disabled(!editor.loaded)
+                    Button("导出已保存 JSON") { editor.exportSavedContent() }.disabled(!editor.loaded)
                     Text("空白不保存，同正文去重。").font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     Button("保存并生效", action: { editor.save() })

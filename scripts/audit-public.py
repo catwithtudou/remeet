@@ -14,6 +14,7 @@ LOCAL_DOCUMENTS = {'CONTEXT.md', 'context.md', 'Remeet_MVP_SPEC.md',
 # Original icon and product screenshots using synthetic notes, visually reviewed.
 # Changed assets must be reviewed again before updating their digests.
 REVIEWED_ASSETS = {
+    'docs/images/saved-export.png': 'e3f7069c4189dbc34b507fecea11822ee3fe938465076cfd65b691bc8e317904',
     'docs/images/json-import.png': 'd22615b984caab7734ca43832d4ac56febb2903672bedc387ceeb40a8fea7c20',
     'Resources/Remeet.icns': 'ce7ba9b12eaa53cba960f1bacb13c19ec6eedc7f277e7ec4c04ba28ddccd46d3',
     'docs/images/my-content.jpg': '084ee49ff159d66f5dcb5626d051dc87363aa34675c0919f5728f0ee5426644f',

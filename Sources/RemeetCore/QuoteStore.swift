@@ -119,6 +119,26 @@ public struct QuoteSelection {
 }
 
 extension QuoteStore {
+    public enum ExportError: LocalizedError {
+        case originalFile
+        public var errorDescription: String? { "请选择其他位置或文件名，不能覆盖正在使用的内容文件。" }
+    }
+
+    /// Export the validated on-disk bytes, without saving drafts or changing the live pool.
+    public func exportSavedContent(to destination: URL) throws {
+        let data = try Data(contentsOf: fileURL)
+        _ = try Self.decode(data)
+        let source = fileURL.resolvingSymlinksInPath().standardizedFileURL
+        let target = destination.resolvingSymlinksInPath().standardizedFileURL
+        guard source != target else { throw ExportError.originalFile }
+        if FileManager.default.fileExists(atPath: target.path) {
+            let sourceID = try source.resourceValues(forKeys: [.fileResourceIdentifierKey]).fileResourceIdentifier as? NSObject
+            let targetID = try target.resourceValues(forKeys: [.fileResourceIdentifierKey]).fileResourceIdentifier as? NSObject
+            if let sourceID, let targetID, sourceID.isEqual(targetID) { throw ExportError.originalFile }
+        }
+        try data.write(to: destination, options: .atomic)
+    }
+
     public struct Backup: Identifiable {
         public let url: URL
         public let date: Date

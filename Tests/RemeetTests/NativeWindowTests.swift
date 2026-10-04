@@ -5,6 +5,167 @@ import Testing
 
 @Suite(.serialized) @MainActor
 struct NativeWindowTests {
+    @Test func savedExportIgnoresDraftsAndFiltersAndRoundTripsThroughImport() throws {
+        _ = NSApplication.shared
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let suite = "Remeet.saved-export.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.set(false, forKey: "showIndicator")
+        defaults.set(false, forKey: "hoverPresent")
+        let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
+        defer {
+            model.shutdown()
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let original = Data(#"[ {"text":"第一段\n  第二段 🌱","source":"中文来源","tags":["阅读","工作"],"extra":"保留原字节"}, {"text":"未筛选的笔记"} ]"#.utf8)
+        try model.store.initializeIfMissing(sample: original)
+        model.start()
+        let due = model.nextRecallDate
+        let current = model.currentQuote
+        let expected = try QuoteStore.decode(original)
+        let editor = ContentEditorSession(model: model)
+        editor.load()
+        editor.selectedID = editor.drafts.last?.id
+        editor.deleteSelected()
+        editor.drafts[0].text = "未保存正文"
+        editor.drafts[0].tagInput = "未提交标签"
+        editor.searchText = "没有匹配"
+        editor.tagFilter = .tag("工作")
+        editor.selectSearchResult()
+        let drafts = editor.drafts.map(\.quote)
+        let ids = editor.drafts.map(\.id)
+        let output = directory.appendingPathComponent("export.json")
+        editor.exportSavedContent { output }
+        #expect(try #require(editor.savedExportResult).get() == output)
+        #expect(try Data(contentsOf: output) == original)
+        #expect(try Data(contentsOf: model.store.fileURL) == original)
+        #expect(editor.drafts.map(\.quote) == drafts && editor.drafts.map(\.id) == ids)
+        #expect(editor.drafts[0].tagInput == "未提交标签" && editor.dirty && editor.canUndoDelete)
+        #expect(editor.searchText == "没有匹配" && editor.tagFilter == .tag("工作") && editor.selectedID == nil)
+        #expect(model.store.quotes == expected && model.currentQuote == current && model.nextRecallDate == due)
+        #expect(!model.panel.isPresented && editor.draftExportResult == nil)
+        #expect(try model.store.backups().isEmpty)
+        #expect(!editor.prepareToClose { .cancel })
+        // A deliberate empty saved pool exports valid JSON and can receive the exported content.
+        try Data("[]".utf8).write(to: model.store.fileURL)
+        editor.load()
+        let emptyOutput = directory.appendingPathComponent("empty.json")
+        editor.exportSavedContent { emptyOutput }
+        #expect(try Data(contentsOf: emptyOutput) == Data("[]".utf8))
+        editor.previewImport(from: output)
+        #expect(editor.pendingImport?.preview.addedCount == expected.count)
+        #expect(editor.confirmImport())
+        #expect(model.store.quotes == expected && editor.drafts.map(\.quote) == expected)
+        let saved = try Data(contentsOf: model.store.fileURL)
+        let backupCount = try model.store.backups().count
+        editor.previewImport(from: output)
+        #expect(editor.pendingImport?.preview.addedCount == 0)
+        #expect(editor.pendingImport?.preview.duplicateCount == expected.count)
+        #expect(!editor.confirmImport())
+        #expect(try Data(contentsOf: model.store.fileURL) == saved)
+        #expect(try model.store.backups().count == backupCount)
+    }
+
+    @Test func savedExportCancellationAndExternalChangesPreserveTheEditingBaseline() throws {
+        _ = NSApplication.shared
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let suite = "Remeet.saved-export-conflict.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
+        defer {
+            model.shutdown()
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let saved = try model.saveContent([Quote(text: "原文")], expectedFileData: nil)
+        let editor = ContentEditorSession(model: model)
+        editor.load()
+        editor.drafts[0].text = "未保存草稿"
+        let ids = editor.drafts.map(\.id)
+        let output = directory.appendingPathComponent("export.json")
+        let previous = Data("previous export".utf8)
+        try previous.write(to: output)
+        editor.exportSavedContent { nil }
+        #expect(editor.savedExportResult == nil)
+        #expect(try Data(contentsOf: output) == previous)
+        #expect(try Data(contentsOf: model.store.fileURL) == saved.fileData)
+        let external = Data(#"[{"text":"选择位置期间外部更新","tags":["外部"]}]"#.utf8)
+        editor.exportSavedContent {
+            #expect(throws: Never.self) { try external.write(to: model.store.fileURL) }
+            return output
+        }
+        #expect(try #require(editor.savedExportResult).get() == output)
+        #expect(try Data(contentsOf: output) == external)
+        #expect(editor.drafts.map(\.id) == ids && editor.drafts[0].text == "未保存草稿")
+        #expect(editor.dirty && model.store.quotes == saved.quotes)
+        #expect(!editor.save()) // Export must not silently accept the new file baseline.
+        let failure = try #require(editor.failure)
+        editor.exportSavedContent { output }
+        #expect(editor.failure == failure)
+        editor.exportSavedContent { nil }
+        #expect(try #require(editor.savedExportResult).get() == output)
+        #expect(try Data(contentsOf: model.store.fileURL) == external)
+        #expect(try model.store.backups().isEmpty)
+    }
+
+    @Test(arguments: ["original", "symlink", "parent-symlink", "hardlink", "missing", "invalid-json", "invalid-encoding", "unreadable", "missing-parent", "write-denied"])
+    func savedExportFailuresKeepSourceDestinationAndDrafts(reason: String) throws {
+        _ = NSApplication.shared
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let suite = "Remeet.saved-export-failure.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
+        defer {
+            model.shutdown()
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory.path)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: model.store.fileURL.path)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let saved = try model.saveContent([Quote(text: "已保存"), Quote(text: "已删除草稿")], expectedFileData: nil)
+        let editor = ContentEditorSession(model: model)
+        editor.load()
+        editor.deleteSelected()
+        let ids = editor.drafts.map(\.id)
+        var output = directory.appendingPathComponent("export.json")
+        let previous = Data("previous export".utf8)
+        try previous.write(to: output)
+        switch reason {
+        case "original": output = model.store.fileURL
+        case "symlink":
+            output = directory.appendingPathComponent("link.json")
+            try FileManager.default.createSymbolicLink(at: output, withDestinationURL: model.store.fileURL)
+        case "parent-symlink":
+            let alias = directory.appendingPathComponent("alias")
+            try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: directory)
+            output = alias.appendingPathComponent("quotes.json")
+        case "hardlink":
+            output = directory.appendingPathComponent("hardlink.json")
+            try FileManager.default.linkItem(at: model.store.fileURL, to: output)
+        case "missing": try FileManager.default.removeItem(at: model.store.fileURL)
+        case "invalid-json": try Data("bad json".utf8).write(to: model.store.fileURL)
+        case "invalid-encoding": try Data([0xff]).write(to: model.store.fileURL)
+        case "unreadable": try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: model.store.fileURL.path)
+        case "missing-parent": output = directory.appendingPathComponent("missing/export.json")
+        default: try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: directory.path)
+        }
+        editor.exportSavedContent { output }
+        #expect(throws: (any Error).self) { try #require(editor.savedExportResult).get() }
+        #expect(editor.dirty && editor.canUndoDelete && editor.drafts.map(\.id) == ids)
+        #expect(model.store.quotes == saved.quotes && editor.draftExportResult == nil)
+        #expect(try Data(contentsOf: directory.appendingPathComponent("export.json")) == previous)
+        #expect(try model.store.backups().isEmpty)
+        if reason == "missing" { #expect(!FileManager.default.fileExists(atPath: model.store.fileURL.path)) }
+        else if reason == "invalid-json" { #expect(try Data(contentsOf: model.store.fileURL) == Data("bad json".utf8)) }
+        else if reason == "invalid-encoding" { #expect(try Data(contentsOf: model.store.fileURL) == Data([0xff])) }
+        else {
+            if reason == "unreadable" { try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: model.store.fileURL.path) }
+            #expect(try Data(contentsOf: model.store.fileURL) == saved.fileData)
+        }
+        if reason == "missing-parent" { #expect(!FileManager.default.fileExists(atPath: output.path)) }
+    }
+
     @Test func jsonImportCancelConfirmAndRepeatPreserveContentAndSchedule() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
