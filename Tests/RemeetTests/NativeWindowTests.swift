@@ -5,6 +5,64 @@ import Testing
 
 @Suite(.serialized) @MainActor
 struct NativeWindowTests {
+    @Test func changeDetectionProtectsDraftsAndAcceptsExactReverts() throws {
+        _ = NSApplication.shared
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let suite = "Remeet.change-detection.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
+        defer {
+            model.shutdown()
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let quotes = [Quote(text: "第一条", tags: ["工作"]), Quote(text: "中间", source: "Book"),
+                      Quote(text: "最后一条", tags: ["阅读"])]
+        let bytes = try JSONEncoder().encode(quotes)
+        try model.store.initializeIfMissing(sample: bytes)
+        let editor = ContentEditorSession(model: model)
+        editor.load()
+        let original = editor.drafts
+        for index in [0, 2] {
+            editor.drafts[index].text += " 未保存"
+            #expect(!editor.prepareToClose { .cancel })
+            editor.drafts[index] = original[index]
+            #expect(!editor.dirty)
+            editor.drafts[index].source = "新来源"
+            #expect(!editor.prepareToClose { .cancel })
+            editor.drafts[index] = original[index]
+            // Equivalent pending tags do not change the saved content.
+            editor.drafts[index].tagInput = " \(original[index].tags[0])， \n"
+            #expect(editor.prepareToClose { Issue.record("Unchanged tags should not ask to save"); return .cancel })
+            editor.drafts[index].tagInput += "新增标签"
+            #expect(!editor.prepareToClose { .cancel })
+            editor.tagFilter = .tag("新增标签")
+            editor.selectSearchResult()
+            #expect(editor.selectedID == original[index].id)
+            editor.drafts[index] = original[index]
+            #expect(!editor.dirty)
+        }
+        editor.tagFilter = .all
+        editor.searchText = " \n"
+        #expect(editor.filteredDrafts.map(\.id) == original.map(\.id))
+        editor.selectedID = original.last?.id
+        editor.selectSearchResult()
+        #expect(editor.selectedID == original.last?.id)
+        editor.searchText = "book"
+        editor.selectSearchResult()
+        #expect(editor.selectedID == original[1].id)
+        editor.addDraft()
+        #expect(!editor.prepareToClose { .cancel })
+        editor.deleteSelected()
+        #expect(!editor.dirty)
+        editor.selectedID = original[0].id
+        editor.deleteSelected()
+        #expect(!editor.prepareToClose { .cancel })
+        editor.undoDelete()
+        #expect(!editor.dirty)
+        #expect(try Data(contentsOf: model.store.fileURL) == bytes)
+    }
+
     @Test(arguments: [false, true])
     func workspaceRecoveryHonorsAllInactiveReasonsAndPause(paused: Bool) throws {
         _ = NSApplication.shared

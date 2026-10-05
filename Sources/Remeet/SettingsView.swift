@@ -278,6 +278,7 @@ final class ContentEditorSession: ObservableObject {
     var selectedDraft: QuoteDraft? { drafts.first { $0.id == selectedID } }
     var filteredDrafts: [QuoteDraft] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.isEmpty, case .all = tagFilter { return drafts }
         return drafts.filter { draft in
             let tags = draft.quote.tags
             let matchesTag: Bool
@@ -351,7 +352,8 @@ final class ContentEditorSession: ObservableObject {
     }
 
     func selectSearchResult() {
-        if !filteredDrafts.contains(where: { $0.id == selectedID }) { selectedID = filteredDrafts.first?.id }
+        let matches = filteredDrafts
+        if !matches.contains(where: { $0.id == selectedID }) { selectedID = matches.first?.id }
     }
 
     func previewSelected() {
@@ -366,7 +368,10 @@ final class ContentEditorSession: ObservableObject {
     @Published private(set) var savedExportResult: Result<URL, Error>?
     private var baseline: [Quote] = []
     private var fileData: Data?
-    var dirty: Bool { drafts.map(\.quote) != baseline }
+    var dirty: Bool {
+        guard drafts.count == baseline.count else { return true }
+        return zip(drafts, baseline).contains { draft, saved in draft.quote != saved }
+    }
 
     init(model: RecallModel) { self.model = model }
 
