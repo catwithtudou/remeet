@@ -116,6 +116,31 @@ class ContentSkillTests(unittest.TestCase):
         plan['after'].append({'text': '额外修改'})
         with self.assertRaises(ValueError): content.apply_plan(plan)
 
+    def test_plan_summary_preserves_metadata_changes_and_row_order(self):
+        before = [{'text': 'A', 'source': '原来源', 'tags': ['工作']},
+                  {'text': 'B'}, {'text': 'C'}]
+        updated_a = {'text': 'A', 'source': '新来源', 'tags': ['阅读']}
+        updated_b = {'text': 'B', 'source': '补充来源'}
+        added = {'text': 'D'}
+        cases = [
+            ('merge', [updated_a, added], [added], []),
+            ('replace', [before[2], updated_b, before[0], added], [updated_b, added], [before[1]]),
+            ('patch', [dict(updated_a, old_text='A')], [updated_a], [before[0]]),
+            ('remove', [before[1]], [], [before[1]]),
+            ('replace', list(reversed(before)), [], []),
+        ]
+        for mode, incoming, expected_added, expected_removed in cases:
+            with self.subTest(mode=mode, incoming=incoming):
+                self.seed(before)
+                original = self.target.read_bytes()
+                plan = content.create_plan(self.input(incoming), self.target, mode)
+                self.assertEqual(plan['added_or_changed'], expected_added)
+                self.assertEqual(plan['removed_or_changed'], expected_removed)
+                self.assertEqual(plan['summary'], {
+                    'before': len(before), 'after': len(plan['after']),
+                    'added_or_changed': len(expected_added), 'removed_or_changed': len(expected_removed)})
+                self.assertEqual(self.target.read_bytes(), original)
+
     def test_patch_remove_and_backup_restore(self):
         self.seed([{'text': 'A', 'source': '来源'}, {'text': 'B'}])
         plan = content.create_plan(self.input([{'old_text': 'A', 'text': '改成多行\n内容'}]), self.target, 'patch')

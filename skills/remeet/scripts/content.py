@@ -215,8 +215,11 @@ def create_plan(input_path, target, mode):
             after = [q for q in before if q['text'] not in removed]
         else:
             raise ValueError('未知模式')
-    added = [q for q in after if q not in before]
-    removed = [q for q in before if q not in after]
+    # Normalization guarantees unique text; compare full rows to retain metadata changes.
+    before_by_text = {q['text']: q for q in before}
+    after_by_text = {q['text']: q for q in after}
+    added = [q for q in after if q != before_by_text.get(q['text'])]
+    removed = [q for q in before if q != after_by_text.get(q['text'])]
     return {'version': 1, 'target': str(target), 'base_sha256': digest(before_data), 'mode': mode,
             'before': before, 'after': after, 'result_sha256': digest(encoded(after)),
             'summary': {'before': len(before), 'after': len(after), 'added_or_changed': len(added), 'removed_or_changed': len(removed)},
