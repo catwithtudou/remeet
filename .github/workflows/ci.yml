@@ -20,6 +20,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # Include release tags for the historical compatibility fixture.
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -34,10 +36,22 @@ jobs:
           python3 --version
       - name: Swift tests
         run: ./scripts/test.sh
+      - name: Build v0.2.14 compatibility fixture
+        run: |
+          legacy_root=$(mktemp -d "$RUNNER_TEMP/remeet-legacy.XXXXXX")
+          git archive v0.2.14 | tar -x -C "$legacy_root"
+          swift build --package-path "$legacy_root" --build-system native -c debug
+          legacy_binary="$(swift build --package-path "$legacy_root" --build-system native -c debug --show-bin-path)/Remeet"
+          test -x "$legacy_binary"
+          echo "REMEET_TEST_OLD_BINARY=$legacy_binary" >> "$GITHUB_ENV"
       - name: Python and reload tests
         env:
           REMEET_TEST_BINARY: .build/debug/Remeet
         run: python3 -m unittest discover -s Tests -v
+      - name: Check website
+        run: |
+          python3 website/check.py
+          node --check website/dist/site.js
       - name: Build and verify App ZIP
         run: |
           test "$(uname -m)" = arm64

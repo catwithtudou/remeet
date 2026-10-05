@@ -52,7 +52,7 @@ REMEET_TEST_BINARY=.build/debug/Remeet REMEET_TEST_OLD_BINARY="$legacy_binary" \
   python3 -m unittest discover -s Tests -v
 ```
 
-需先运行 Swift 测试生成当前 Debug 二进制；未设置 `REMEET_TEST_OLD_BINARY` 时仅跳过历史版本替换用例。两个进程均使用临时 App 包、同一个隔离数据目录和独立偏好域；这验证进程替换与文件兼容，不代替跨机下载安装、真实登录启动或界面验收。
+需先运行 Swift 测试生成当前 Debug 二进制；本地未设置 `REMEET_TEST_OLD_BINARY` 时仅跳过历史版本替换用例。主 CI 会获取发布标签并构建 `v0.2.14`，设置该变量后执行兼容测试；历史构建失败会使 CI 失败，不会静默跳过。两个进程均使用临时 App 包、同一个隔离数据目录和独立偏好域；这验证进程替换与文件兼容，不代替跨机下载安装、真实登录启动或界面验收。
 
 自动化覆盖数据校验、保存冲突、标签、调度、窗口几何及导入/恢复。真实刘海位置、焦点、锁屏唤醒、不同显示器和下载安装体验仍需实机检查。
 
@@ -84,7 +84,7 @@ REMEET_TEST_BINARY=.build/debug/Remeet REMEET_TEST_OLD_BINARY="$legacy_binary" \
 
 至少记录 macOS 版本、架构和显示器条件。最低支持 macOS 14、CI 的 macOS 15 和本机验证是不同证据，不能相互替代。模拟通知、窗口几何测试或登录项接口回读不算真实睡眠、显示器切换或登录验收。
 
-[GitHub Actions](https://github.com/catwithtudou/remeet/actions/workflows/ci.yml) 在推送到 main 或提交 PR 时，运行公开文件审计、Swift/Python 测试和 Release 打包检查。成功后保留与提交 SHA 对应的 App ZIP 产物 14 天；面向用户的长期下载位于 [Releases](https://github.com/catwithtudou/remeet/releases)。
+[GitHub Actions](https://github.com/catwithtudou/remeet/actions/workflows/ci.yml) 在推送到 main 或提交 PR 时，运行公开文件审计、Swift/Python 测试（含历史版本替换）、网站校验和 Release 打包检查。成功后保留与提交 SHA 对应的 App ZIP 产物 14 天；面向用户的长期下载位于 [Releases](https://github.com/catwithtudou/remeet/releases)。
 
 ## 隔离运行
 
