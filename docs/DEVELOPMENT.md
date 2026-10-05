@@ -37,9 +37,52 @@ REMEET_TEST_BINARY=.build/debug/Remeet python3 -m unittest discover -s Tests -v
 
 Swift 使用 Swift Testing，脚本补齐部分 CLT 版本所需的 framework 路径。原生窗口测试需要已登录的图形会话；仅运行无窗口逻辑可加 `--skip NativeWindowTests`。
 
+脚本也会在存在 `lib_TestingInterop.dylib` 时补齐其运行库路径。若测试尚未开始就报 `PackageDescription` 链接错误，先用临时空 Swift Package 复现，检查 CLT 安装是否混用了不同版本的 `.swiftinterface` 和动态库；不要通过改业务代码或降低 Swift 版本掩盖工具链问题。
+
 Python 3.10+ 测试使用标准库、临时目录和构造数据。`REMEET_TEST_BINARY` 启用独立数据目录/偏好域的重载验证；不设置时跳过此项。这里必须使用 Debug 二进制，Release 不接受隔离环境变量。
 
+重载集成测试还覆盖首次启动创建示例，以及重启时保留合法空文件、损坏文件和无标签旧格式。可额外构建历史版本，验证旧进程退出后替换为当前二进制，内容、偏好、备份和草稿导出不被覆盖：
+
+```sh
+legacy_root=$(mktemp -d "${TMPDIR:-/tmp}/remeet-legacy.XXXXXX")
+git archive v0.2.14 | tar -x -C "$legacy_root"
+swift build --package-path "$legacy_root" --build-system native -c debug
+legacy_binary="$(swift build --package-path "$legacy_root" --build-system native -c debug --show-bin-path)/Remeet"
+REMEET_TEST_BINARY=.build/debug/Remeet REMEET_TEST_OLD_BINARY="$legacy_binary" \
+  python3 -m unittest discover -s Tests -v
+```
+
+需先运行 Swift 测试生成当前 Debug 二进制；未设置 `REMEET_TEST_OLD_BINARY` 时仅跳过历史版本替换用例。两个进程均使用临时 App 包、同一个隔离数据目录和独立偏好域；这验证进程替换与文件兼容，不代替跨机下载安装、真实登录启动或界面验收。
+
 自动化覆盖数据校验、保存冲突、标签、调度、窗口几何及导入/恢复。真实刘海位置、焦点、锁屏唤醒、不同显示器和下载安装体验仍需实机检查。
+
+### 稳定性维护验收
+
+每轮维护先运行上面的完整测试，再运行 Release 构建和[打包校验](RELEASING.md)。网站同步检查 `python3 website/check.py` 和 `node --check website/dist/site.js`。测试使用临时目录和独立偏好域，不使用真实笔记。发布前审计暂存区，未暂存的修改不在 `audit-public.py` 的检查范围内。
+
+`NativeWindowTests.contentScaleRoundTrip` 用 100、1,000、10,000 条合成笔记验证编辑器载入、搜索和标签、混合重复项导入、备份、导出、重新打开和重复导入不改写文件。它随完整测试运行，也可单独运行：
+
+```sh
+./scripts/test.sh --filter contentScaleRoundTrip
+```
+
+输出的耗时是 Debug 模式下单次操作的诊断基线，包含断言开销，不是 Release 性能承诺，也不等于界面渲染或输入延迟。比较性能时使用相同机器、构建配置与数据规模，多次采样；CI 不用固定毫秒阈值判断成败。
+
+`workspaceRecoveryHonorsAllInactiveReasonsAndPause` 通过进程内的工作区通知验证多种停用原因叠加、暂停状态保留、显示器通知后收起、关闭后不重新启动定时器，以及模型释放。它不发送系统级锁屏通知，也不改变机器的睡眠或登录状态。
+
+自动化通过后，使用隔离 Debug 实例补充以下实机验收，并分别记录“通过 / 失败 / 未测”：
+
+| 场景 | 检查结果 |
+| --- | --- |
+| 完整编辑流程 | 新增、标签、搜索、保存、重开、撤销删除、恢复备份、导入导出后的内容一致 |
+| 草稿与外部修改 | 关闭或退出时取消不丢草稿；外部改写后保存拒绝覆盖，草稿导出可保留修改 |
+| 显示与焦点 | 有/无刘海、不同缩放、全屏与多显示器切换；卡片不抢焦点，悬停和移出行为正确 |
+| 睡眠与锁屏 | 恢复后不补播、不意外展开，下一次计划有效；暂停状态仍保留 |
+| 登录启动 | 独立 Bundle ID 下实际登录后启动、关闭后不再启动；系统拒绝时状态和提示一致 |
+| 安装与升级 | 另一台 Mac 从真实下载入口安装；升级保留旧笔记、标签、偏好和备份 |
+| 常驻表现 | Release 长时间空闲与多次打开/关闭后检查 CPU、内存和窗口残留 |
+
+至少记录 macOS 版本、架构和显示器条件。最低支持 macOS 14、CI 的 macOS 15 和本机验证是不同证据，不能相互替代。模拟通知、窗口几何测试或登录项接口回读不算真实睡眠、显示器切换或登录验收。
 
 [GitHub Actions](https://github.com/catwithtudou/remeet/actions/workflows/ci.yml) 在推送到 main 或提交 PR 时，运行公开文件审计、Swift/Python 测试和 Release 打包检查。成功后保留与提交 SHA 对应的 App ZIP 产物 14 天；面向用户的长期下载位于 [Releases](https://github.com/catwithtudou/remeet/releases)。
 

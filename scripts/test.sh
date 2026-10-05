@@ -11,4 +11,9 @@ if [[ -d "$frameworks/Testing.framework" ]]; then
            -Xlinker -F -Xlinker "$frameworks"
            -Xlinker -rpath -Xlinker "$frameworks")
 fi
+# Recent CLT versions keep Testing's interop runtime outside the framework path.
+testing_runtime="$developer_dir/Library/Developer/usr/lib"
+if [[ -f "$testing_runtime/lib_TestingInterop.dylib" ]]; then
+    args+=(-Xlinker -rpath -Xlinker "$testing_runtime")
+fi
 swift test "${args[@]}" "$@"

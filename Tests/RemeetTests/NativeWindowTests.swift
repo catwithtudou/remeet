@@ -5,6 +5,130 @@ import Testing
 
 @Suite(.serialized) @MainActor
 struct NativeWindowTests {
+    @Test(arguments: [false, true])
+    func workspaceRecoveryHonorsAllInactiveReasonsAndPause(paused: Bool) throws {
+        _ = NSApplication.shared
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let suite = "Remeet.workspace.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.set(false, forKey: "showIndicator")
+        defaults.set(false, forKey: "hoverPresent")
+        defaults.set(paused, forKey: "isPaused")
+        defaults.set(0, forKey: "frequencyMinutes")
+        defaults.set(1, forKey: "customIntervalMinutes")
+        var model: RecallModel? = RecallModel(dataDirectory: directory, userDefaults: defaults)
+        let isReleased = { [weak model] in model == nil }
+        defer {
+            model?.shutdown()
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        try autoreleasepool {
+            let model = try #require(model)
+            let original = Data(#"[{"text":"保留的笔记","tags":["示例"]}]"#.utf8)
+            try model.store.initializeIfMissing(sample: original)
+            model.start()
+            model.remindCurrent()
+            #expect(model.panel.isPresented == !paused)
+            let workspace = NSWorkspace.shared.notificationCenter
+            // These are in-process notifications, not real sleep or lock operations.
+            workspace.post(name: NSWorkspace.willSleepNotification, object: nil)
+            workspace.post(name: NSWorkspace.screensDidSleepNotification, object: nil)
+            workspace.post(name: NSWorkspace.sessionDidResignActiveNotification, object: nil)
+            #expect(!model.canRemind && !model.panel.isPresented && !model.panel.windowIsVisible)
+            workspace.post(name: NSWorkspace.didWakeNotification, object: nil)
+            #expect(!model.canRemind)
+            workspace.post(name: NSWorkspace.screensDidWakeNotification, object: nil)
+            #expect(!model.canRemind)
+            model.remindCurrent()
+            #expect(!model.panel.isPresented)
+            workspace.post(name: NSWorkspace.sessionDidBecomeActiveNotification, object: nil)
+            #expect(model.canRemind == !paused)
+            #expect(model.settings.isPaused == paused && !model.panel.isPresented)
+            #expect(try #require(model.nextRecallDate) > Date())
+            model.remindCurrent()
+            #expect(model.panel.isPresented == !paused)
+            NotificationCenter.default.post(name: NSApplication.didChangeScreenParametersNotification, object: nil)
+            #expect(!model.panel.isPresented)
+            #expect(try Data(contentsOf: model.store.fileURL) == original)
+            model.shutdown()
+            #expect(model.nextRecallDate == nil && !model.panel.windowIsVisible)
+            workspace.post(name: NSWorkspace.didWakeNotification, object: nil)
+            NotificationCenter.default.post(name: .NSSystemClockDidChange, object: nil)
+            #expect(model.nextRecallDate == nil && !model.panel.windowIsVisible)
+        }
+        model = nil
+        #expect(isReleased()) // Observers and timers must not retain a stopped model.
+    }
+
+    @Test(arguments: [100, 1_000, 10_000])
+    func contentScaleRoundTrip(count: Int) throws {
+        _ = NSApplication.shared
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let suite = "Remeet.scale.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.set(false, forKey: "showIndicator")
+        defaults.set(false, forKey: "hoverPresent")
+        let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
+        defer {
+            model.shutdown()
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let quotes = (0..<count).map {
+            Quote(text: "示例笔记 \($0)\n" + String(repeating: "保留原文与上下文。", count: 12),
+                  source: "示例来源 \($0 % 20)", tags: ["主题\($0 % 10)", "阅读"])
+        }
+        try model.store.initializeIfMissing(sample: JSONEncoder().encode(quotes))
+        model.start()
+        let due = model.nextRecallDate
+        let editor = ContentEditorSession(model: model)
+        let clock = ContinuousClock()
+        let loadTime = clock.measure { editor.load() }
+        #expect(editor.loaded && !editor.dirty && editor.drafts.map(\.quote) == quotes)
+
+        // Measure the same derived values used by the editor, with real search and tags.
+        editor.searchText = "示例笔记 \(count - 1)\n"
+        editor.tagFilter = .tag("主题9")
+        let searchTime = clock.measure {
+            #expect(editor.filteredDrafts.map(\.quote) == [quotes[count - 1]])
+            #expect(editor.availableTags.count == 11)
+            #expect(!editor.dirty)
+        }
+        let incoming = directory.appendingPathComponent("incoming.json")
+        let added = Quote(text: "新增的示例笔记", source: "新增来源", tags: ["新增"])
+        try JSONEncoder().encode(quotes + [added, added, Quote(text: " \n")]).write(to: incoming)
+        let previewTime = clock.measure { editor.previewImport(from: incoming) }
+        let preview = try #require(editor.pendingImport?.preview)
+        #expect(preview.addedCount == 1 && preview.duplicateCount == count + 1 && preview.blankCount == 1)
+        let saveTime = clock.measure { #expect(editor.confirmImport()) }
+        let expected = quotes + [added]
+        #expect(model.store.quotes == expected && editor.drafts.map(\.quote) == expected)
+        #expect(!editor.dirty && model.nextRecallDate == due && !model.panel.isPresented)
+        #expect(try model.store.backups().count == 1)
+
+        let exported = directory.appendingPathComponent("exported.json")
+        let exportTime = clock.measure { editor.exportSavedContent { exported } }
+        #expect(try #require(editor.savedExportResult).get() == exported)
+        let bytes = try Data(contentsOf: exported)
+        #expect(bytes == (try Data(contentsOf: model.store.fileURL)))
+        #expect(try QuoteStore.decode(bytes) == expected)
+        // A fresh editor and store must see the same saved data after reopening.
+        let reopened = QuoteStore(fileURL: model.store.fileURL)
+        #expect(reopened.reload() && reopened.quotes == expected)
+        let reopenedEditor = ContentEditorSession(model: model)
+        reopenedEditor.load()
+        #expect(reopenedEditor.loaded && !reopenedEditor.dirty)
+        #expect(reopenedEditor.drafts.map(\.quote) == expected)
+        let beforeRepeat = try Data(contentsOf: model.store.fileURL)
+        editor.previewImport(from: exported)
+        #expect(editor.pendingImport?.preview.addedCount == 0)
+        #expect(!editor.confirmImport())
+        #expect(try Data(contentsOf: model.store.fileURL) == beforeRepeat)
+        #expect(try model.store.backups().count == 1)
+        print("Content scale \(count) (Debug, one sample): load=\(loadTime), search/tags/dirty=\(searchTime), preview=\(previewTime), save=\(saveTime), export=\(exportTime)")
+    }
+
     @Test func savedExportIgnoresDraftsAndFiltersAndRoundTripsThroughImport() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
