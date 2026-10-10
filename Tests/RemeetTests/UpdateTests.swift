@@ -193,6 +193,48 @@ struct UpdateTests {
         #expect(updater.pendingInstallation == nil)
     }
 
+    @Test(arguments: [false, true])
+    func draftSaveMustFinishBeforeHelperStartsAndBackupFailurePreventsQuit(failBackup: Bool) throws {
+        let root = try temporary()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let suite = "local.Remeet.update-save.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = RecallModel(dataDirectory: root.appendingPathComponent("data"), userDefaults: defaults)
+        defer { model.shutdown() }
+        let original = Data("[{\"text\":\"已保存\"}]".utf8)
+        try model.store.initializeIfMissing(sample: original)
+        let editor = ContentEditorSession(model: model)
+        editor.load()
+        editor.drafts[0].text = "保存后安装"
+        editor.drafts[0].source = "来源"
+        editor.drafts[0].tagInput = "尚未提交的标签"
+        let expected = editor.drafts.map(\.quote)
+        if failBackup {
+            try Data("阻止创建备份目录".utf8).write(to: model.store.fileURL.deletingLastPathComponent().appendingPathComponent("editor-backups"))
+        }
+        let updater = UpdateController(defaults: defaults)
+        let plan = try installation(root)
+        updater.queueInstallation(plan)
+        var starts = 0
+        let canQuit = updater.prepareToTerminate(protectDrafts: { editor.prepareToClose { .save } }, startHelper: { value in
+            starts += 1
+            let saved = try JSONDecoder().decode([Quote].self, from: Data(contentsOf: model.store.fileURL))
+            let backup = try Data(contentsOf: #require(model.store.backups().first).url)
+            let fingerprint = try UpdateFiles.fingerprint(value.target)
+            #expect(!editor.dirty)
+            #expect(saved == expected && backup == original)
+            #expect(fingerprint == value.oldFingerprint)
+        })
+        #expect(canQuit == !failBackup && starts == (failBackup ? 0 : 1))
+        #expect(updater.pendingInstallation == nil)
+        if failBackup {
+            #expect(editor.dirty && editor.drafts.map(\.quote) == expected && editor.failure != nil)
+            #expect(try Data(contentsOf: model.store.fileURL) == original)
+            #expect(!FileManager.default.fileExists(atPath: plan.workspace.path))
+        }
+    }
+
     @Test func helperFailurePreventsQuitAndChannelRequiresExplicitOptIn() throws {
         let root = try temporary()
         defer { try? FileManager.default.removeItem(at: root) }

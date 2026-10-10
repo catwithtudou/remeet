@@ -58,7 +58,7 @@ REMEET_TEST_BINARY=.build/debug/Remeet REMEET_TEST_OLD_BINARY="$legacy_binary" \
 
 ### 更新验证
 
-`UpdateTests` 和 `UpdateNetworkTests` 覆盖版本／通道／架构选择、HTTP／限流、分页、下载失败清理、草稿取消／保存冲突、helper 就绪、原子替换和失败恢复。完整 Python 测试在设置 `REMEET_TEST_BINARY` 后追加真实独立 helper 与 Launch Services 的升级／启动失败回退，使用带空格的临时路径、独立数据目录和偏好域；不操作 `/Applications` 或真实内容。夹具没有下载隔离属性，这不等于真实 Release 的 Gatekeeper 验收。
+`UpdateTests` 和 `UpdateNetworkTests` 覆盖版本／通道／架构选择、HTTP／限流、分页、下载失败清理、草稿取消／保存冲突、保存落盘后才启动 helper、备份失败阻止退出、helper 就绪、原子替换和失败恢复。完整 Python 测试在设置 `REMEET_TEST_BINARY` 后追加真实独立 helper 与 Launch Services 的升级、启动失败回退，以及 helper 就绪后候选包变化时保留并重启旧 App，使用带空格的临时路径、独立数据目录和偏好域；不操作 `/Applications` 或真实内容。夹具没有下载隔离属性，这不等于真实 Release 的 Gatekeeper 验收。
 
 真实附件下载与校验可单独运行，不安装或启动该附件：
 

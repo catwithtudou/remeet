@@ -87,7 +87,7 @@ class UpdateInstallationTests(unittest.TestCase):
         path = self.root / 'installation.json'
         return json.loads(path.read_text()) if path.exists() else {}
 
-    def start_installation(self, candidate_binary):
+    def start_installation(self, candidate_binary, before_quit=None):
         from test_content_skill import content
         old = self.spawn([str(self.target / 'Contents/MacOS/Remeet')])
         self.wait_for(lambda: content.notify_app(self.target, self.data / 'quotes.json').get('status') == 'reloaded')
@@ -109,6 +109,8 @@ class UpdateInstallationTests(unittest.TestCase):
         self.assertEqual(self.receipt().get('status'), 'waiting', (self.receipt(), (self.root / 'helper.log').read_text()))
         self.assertEqual(self.fingerprint(self.target), self.target_fingerprint)
         self.assertFalse((workspace / 'previous.app').exists())
+        if before_quit:
+            before_quit(workspace)
         old.terminate()  # Only a disposable, unedited fixture; draft gating is covered in Swift.
         old.wait(timeout=5)
         return workspace, helper, candidate_fingerprint
@@ -134,6 +136,21 @@ class UpdateInstallationTests(unittest.TestCase):
         self.assertEqual(self.receipt().get('status'), 'rolledBack', self.receipt())
         self.assertEqual(self.fingerprint(self.target), self.target_fingerprint)
         self.assertEqual(self.fingerprint(workspace / 'previous.app'), self.target_fingerprint)
+        self.assertEqual(content.notify_app(self.target, self.data / 'quotes.json')['status'], 'reloaded')
+        self.assertEqual(self.snapshot(), self.before_data)
+        self.assertEqual(self.preferences(), self.before_preferences)
+
+    def test_candidate_changed_after_helper_ready_restarts_original_without_replacement(self):
+        from test_content_skill import content
+
+        def damage_candidate(workspace):
+            (workspace / 'candidate.app/Contents/Info.plist').write_bytes(b'changed after readiness')
+
+        workspace, helper, _ = self.start_installation(Path(BINARY).resolve(), before_quit=damage_candidate)
+        helper.wait(timeout=30)
+        self.assertEqual(self.receipt().get('status'), 'failed', self.receipt())
+        self.assertEqual(self.fingerprint(self.target), self.target_fingerprint)
+        self.assertFalse((workspace / 'previous.app').exists())
         self.assertEqual(content.notify_app(self.target, self.data / 'quotes.json')['status'], 'reloaded')
         self.assertEqual(self.snapshot(), self.before_data)
         self.assertEqual(self.preferences(), self.before_preferences)
