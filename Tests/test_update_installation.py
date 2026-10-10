@@ -1,14 +1,14 @@
 """Run the real installer helper and Launch Services against disposable Debug apps.
 
-Fixtures are local, unquarantined apps. Gatekeeper for an internet download remains
-a manual acceptance gate; the live Swift check retains quarantine but never launches it.
+Fixtures are local Debug apps; an opt-in case retains quarantine during real launches.
+User approval of an internet-downloaded release remains a manual acceptance gate;
+the live Swift check retains quarantine but never launches that release.
 """
 import hashlib
 import json
 import os
 from pathlib import Path
 import plistlib
-import re
 import shutil
 import subprocess
 import sys
@@ -155,6 +155,48 @@ class UpdateInstallationTests(unittest.TestCase):
         self.assertEqual(self.snapshot(), self.before_data)
         self.assertEqual(self.preferences(), self.before_preferences)
 
+    @unittest.skipUnless(os.environ.get('REMEET_TEST_QUARANTINED_UPDATES') == '1',
+                         'Opt in on a desktop Mac to exercise real quarantined app launches')
+    def test_quarantined_candidate_does_not_leave_a_second_app_after_recovery(self):
+        from test_content_skill import content
+
+        def quarantine(workspace):
+            subprocess.run(['xattr', '-w', 'com.apple.quarantine',
+                            '0081;00000000;;' + str(uuid.uuid4()).upper(),
+                            str(workspace / 'candidate.app')], check=True)
+
+        workspace, helper, new_fingerprint = self.start_installation(Path(BINARY).resolve(), before_quit=quarantine)
+        helper.wait(timeout=90)  # System policy and a refused normal quit can delay the launch result.
+        status = self.receipt().get('status')
+        self.assertIn(status, ['rolledBack', 'complete', 'manualRecovery'], self.receipt())
+        self.assertEqual(self.fingerprint(self.target), self.target_fingerprint if status == 'rolledBack' else new_fingerprint)
+        self.assertEqual(self.fingerprint(workspace / 'previous.app'), self.target_fingerprint)
+        retained = workspace / 'candidate.app' if status == 'rolledBack' else self.target
+        self.assertTrue(subprocess.check_output(['xattr', '-p', 'com.apple.quarantine', str(retained)]).strip())
+        if status == 'manualRecovery':
+            self.assertIn('新 App 仍在运行', self.receipt().get('message', ''))
+        else:
+            self.assertEqual(content.notify_app(self.target, self.data / 'quotes.json')['status'], 'reloaded')
+        process_count = len(self.owned_app_pids())
+        self.assertLessEqual(process_count, 1, 'A failed launch left a second fixture app running')
+        if status != 'manualRecovery':
+            self.assertEqual(process_count, 1)
+        self.assertEqual(self.snapshot(), self.before_data)
+        self.assertEqual(self.preferences(), self.before_preferences)
+
+    def owned_app_pids(self):
+        # Match only this fixture's unique environment, including translocated instances.
+        listing = subprocess.check_output(['ps', 'eww', '-axo', 'pid=,stat=,command='], text=True)
+        result = []
+        for line in listing.splitlines():
+            fields = line.strip().split(None, 2)
+            if len(fields) == 3 and not fields[1].startswith('Z'):
+                pid, _, command = fields
+                if ('/Contents/MacOS/Remeet' in command and '--reload-content' not in command
+                        and 'REMEET_DATA_DIR=' + str(self.data) in command):
+                    result.append(int(pid))
+        return result
+
     def stop_processes(self):
         for process in self.processes:
             if process.poll() is None:
@@ -164,16 +206,12 @@ class UpdateInstallationTests(unittest.TestCase):
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait(timeout=5)
-        # Launch Services children are not Popen objects. Match only the exact fixture path.
-        pattern = re.compile('^' + re.escape(str(self.target / 'Contents/MacOS/Remeet')) + r'(?:\s|$)')
-        listing = subprocess.check_output(['ps', '-axo', 'pid=,command='], text=True)
-        for line in listing.splitlines():
-            pid, _, command = line.strip().partition(' ')
-            if pattern.match(command.lstrip()):
-                try:
-                    os.kill(int(pid), 15)
-                except ProcessLookupError:
-                    pass
+        # Stop only disposable children after assertions, including App Translocation.
+        for pid in self.owned_app_pids():
+            try:
+                os.kill(pid, 15)
+            except ProcessLookupError:
+                pass
         subprocess.run(['defaults', 'delete', self.suite], capture_output=True)
 
 

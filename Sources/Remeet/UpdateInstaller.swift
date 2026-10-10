@@ -238,23 +238,31 @@ enum UpdateInstaller {
             ["REMEET_DATA_DIR", "REMEET_DEFAULTS_SUITE"].contains($0.key)
         }
         #endif
+        let existingPIDs = Set(NSWorkspace.shared.runningApplications.map(\.processIdentifier))
         let app = try await NSWorkspace.shared.openApplication(at: url, configuration: configuration)
-        guard app.bundleURL?.resolvingSymlinksInPath().path == url.resolvingSymlinksInPath().path else {
-            throw UpdateFailure("系统启动的 App 路径不匹配，已停止更新。")
-        }
-        // This is a startup check, not a guarantee of future stability or content correctness.
-        for _ in 0..<30 {
-            try await Task.sleep(for: .milliseconds(100))
-            if app.isTerminated { throw UpdateFailure("新 App 在启动时退出。") }
-        }
-        if !app.isFinishedLaunching {
+        do {
+            // This is a startup check, not a guarantee of future stability or content correctness.
+            for _ in 0..<30 {
+                try await Task.sleep(for: .milliseconds(100))
+                if app.isTerminated { throw UpdateFailure("新 App 在启动时退出。") }
+            }
+            guard app.bundleURL?.resolvingSymlinksInPath().path == url.resolvingSymlinksInPath().path else {
+                throw UpdateFailure("系统启动的 App 路径不匹配，已停止更新。")
+            }
+            guard app.isFinishedLaunching else { throw UpdateFailure("App 未能完成启动。") }
+        } catch {
+            // Stop only this launch's new process, including App Translocation, before rollback.
+            guard !app.isTerminated else { throw error }
+            guard !existingPIDs.contains(app.processIdentifier) else { throw LiveUpdateProcess() }
             app.terminate()
-            for _ in 0..<100 where !app.isTerminated { try await Task.sleep(for: .milliseconds(100)) }
+            for _ in 0..<100 where !app.isTerminated {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
             if !app.isTerminated {
                 // Do not replace a live process or force it to quit; preserve the backup.
                 throw LiveUpdateProcess()
             }
-            throw UpdateFailure("App 未能完成启动。")
+            throw error
         }
     }
 

@@ -60,6 +60,15 @@ REMEET_TEST_BINARY=.build/debug/Remeet REMEET_TEST_OLD_BINARY="$legacy_binary" \
 
 `UpdateTests` 和 `UpdateNetworkTests` 覆盖版本／通道／架构选择、HTTP／限流、分页、下载失败清理、草稿取消／保存冲突、保存落盘后才启动 helper、备份失败阻止退出、helper 就绪、原子替换和失败恢复。离线夹具分别验证可解析但版本错误的 App、签名损坏的 App，以及路径穿越、绝对路径、反斜杠和符号链接 ZIP 在对应校验处被拒绝。完整 Python 测试在设置 `REMEET_TEST_BINARY` 后追加真实独立 helper 与 Launch Services 的升级、启动失败回退，以及 helper 就绪后候选包变化时保留并重启旧 App，使用带空格的临时路径、独立数据目录和偏好域；不操作 `/Applications` 或真实内容。夹具没有下载隔离属性，这不等于真实 Release 的 Gatekeeper 验收。
 
+带下载隔离属性的本地 Debug 夹具验证默认关闭，需在有桌面会话的 Mac 上显式启用：
+
+```sh
+REMEET_TEST_BINARY=.build/debug/Remeet REMEET_TEST_QUARANTINED_UPDATES=1 \
+  python3 -m unittest discover -s Tests -p test_update_installation.py -v
+```
+
+该用例允许系统正常启动、回退或需要手动恢复；分别核对安装包、旧备份、数据及偏好，并确保故障处理后最多一份本测试的 App 存活。它保留 quarantine，不允许或绕过系统安全提示；出现系统确认时交给人工验收，不循环重试。本地 Debug 夹具不能替代真实发布包的安装验收。
+
 真实附件下载与校验可单独运行，不安装或启动该附件：
 
 ```sh
