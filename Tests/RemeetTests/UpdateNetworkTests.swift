@@ -25,6 +25,79 @@ struct UpdateNetworkTests {
         return ReleaseClient(session: URLSession(configuration: configuration))
     }
 
+    @MainActor
+    func waitForOperation(_ updater: UpdateController) async throws {
+        let deadline = Date().addingTimeInterval(10)
+        while updater.busy && Date() < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        try #require(!updater.busy)
+    }
+
+    @Test(arguments: ["download", "cancel", "failure"]) @MainActor
+    func oneClickUpdateDownloadsThenRequestsProtectedQuit(outcome: String) async throws {
+        let fixture = UpdateTests()
+        let root = try fixture.temporary()
+        let suite = "local.Remeet.update-action.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        let target = try fixture.app(root, name: "installed.app", version: "0.2.17")
+        let incoming = try fixture.app(root, name: "incoming/Remeet.app", version: "0.2.18")
+        let archive = root.appendingPathComponent("update.zip")
+        try UpdateFiles.tool("/usr/bin/ditto", ["-c", "-k", "--keepParent", incoming.path, archive.path])
+        let bytes = try Data(contentsOf: archive)
+        let name = "Remeet-0.2.18-\(ReleaseUpdate.architecture).zip"
+        let checksum = Data((try UpdateFiles.sha256(archive) + "  " + name + "\n").utf8)
+        let base = "https://github.com/catwithtudou/remeet/releases"
+        let releases = try JSONSerialization.data(withJSONObject: [["tag_name": "v0.2.18", "html_url": "\(base)/tag/v0.2.18",
+            "draft": false, "prerelease": false, "assets": [
+                ["name": name, "size": bytes.count, "state": "uploaded", "browser_download_url": "\(base)/download/v0.2.18/\(name)"],
+                ["name": name + ".sha256", "size": checksum.count, "state": "uploaded", "browser_download_url": "\(base)/download/v0.2.18/\(name).sha256"]
+            ]]])
+        UpdateProtocol.respond = { request in
+            if request.url!.host == "api.github.com" { return (200, releases) }
+            if outcome == "failure" { return (500, Data()) }
+            return (200, request.url!.path.hasSuffix(".sha256") ? checksum : bytes)
+        }
+        let updater = UpdateController(bundle: try #require(Bundle(url: target)), defaults: defaults, client: client())
+        defer {
+            updater.onQuitForInstallation = nil
+            if let app = updater.downloadedApp {
+                try? FileManager.default.removeItem(at: app.deletingLastPathComponent().deletingLastPathComponent())
+            }
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let original = try UpdateFiles.fingerprint(target)
+        var quits = 0
+        updater.onQuitForInstallation = {
+            quits += 1
+            #expect(updater.pendingInstallation != nil)
+            #expect(!updater.prepareToTerminate(protectDrafts: { false }, startHelper: { _ in
+                Issue.record("Cancelled drafts must never start the installer")
+            }))
+        }
+        #expect(updater.actionTitle == "检查更新")
+        updater.check() // The startup check may discover an update, but cannot download or quit.
+        try await waitForOperation(updater)
+        #expect(updater.available?.release.tagName == "v0.2.18")
+        #expect(updater.downloadedApp == nil && quits == 0 && updater.failure == nil)
+        #expect(updater.actionTitle == "更新并重启")
+        updater.performPrimaryAction()
+        if outcome == "cancel" { updater.cancel() }
+        try await waitForOperation(updater)
+        #expect(try UpdateFiles.fingerprint(target) == original)
+        #expect(updater.pendingInstallation == nil)
+        if outcome == "download" {
+            #expect(quits == 1 && updater.failure == nil)
+            let cached = try #require(updater.downloadedApp)
+            #expect(updater.actionTitle == "重启更新")
+            updater.performPrimaryAction() // Retry after cancelling the draft dialog reuses the download.
+            #expect(quits == 2 && updater.downloadedApp == cached)
+        } else {
+            #expect(quits == 0 && updater.downloadedApp == nil)
+            #expect((updater.failure != nil) == (outcome == "failure"))
+            #expect(!updater.status.contains("最新"))
+        }
+    }
+
     @Test func releaseListingIncludesLaterPagesRatherThanUsingStableOnlyLatestEndpoint() async throws {
         let release: [String: Any] = ["tag_name": "v0.2.17", "html_url": "https://github.com/catwithtudou/remeet/releases/tag/v0.2.17",
                                       "draft": false, "prerelease": true, "assets": []]

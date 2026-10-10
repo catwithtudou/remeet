@@ -70,8 +70,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         item.menu = menu
         statusItem = item
         model.panel.onOpenSettings = { [weak self] in self?.showSettings() }
+        model.panel.updater = updater
         updater.onQuitForInstallation = { NSApp.terminate(nil) }
         model.start()
+        updater.check()
         #if DEBUG
         if CommandLine.arguments.contains("--preview") { model.remindCurrent() }
         if CommandLine.arguments.contains("--settings") { showSettings() }
@@ -98,7 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         menu.addItem(.separator())
         add(model.settings.isPaused ? "恢复展示" : "暂停展示", action: #selector(togglePause), to: menu)
         add("设置", action: #selector(showSettings), to: menu)
-        add("检查更新…", action: #selector(showUpdates), to: menu)
+        add(updater.actionTitle, action: #selector(showUpdates), to: menu, enabled: !updater.busy)
         #if DEBUG
         add("模拟定时触发（调试）", action: #selector(simulateTick), to: menu)
         #endif
@@ -119,7 +121,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     @objc private func openDataDirectory() { model.openDataDirectory() }
     @objc private func togglePause() { model.updateSettings { $0.isPaused.toggle() } }
     @objc private func quit() { NSApp.terminate(nil) }
-    @objc private func showUpdates() { showSettings(); updater.check() }
+    @objc private func showUpdates() {
+        if updater.available == nil { showSettings() }
+        updater.performPrimaryAction()
+    }
     #if DEBUG
     @objc private func simulateTick() { model.handleScheduledEvent(.scheduled) }
     #endif

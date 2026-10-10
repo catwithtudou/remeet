@@ -166,6 +166,33 @@ private struct RecallHeaderActions: View {
     }
 }
 
+private struct RecallHeaderUpdateStatus: View {
+    @ObservedObject var updater: UpdateController
+    let openSettings: () -> Void
+
+    var body: some View {
+        if updater.available != nil {
+            Button {
+                if updater.failure != nil { openSettings() }
+                else { updater.performPrimaryAction() }
+            } label: {
+                Label(updater.failure != nil ? "更新失败" : (updater.busy ? "下载中…" : "更新"), systemImage: "arrow.down.circle")
+            }
+            .font(.system(size: 11))
+            .buttonStyle(.plain)
+            .foregroundStyle(.mint)
+            .disabled(updater.busy)
+            .accessibilityLabel(updater.failure != nil ? "查看更新问题" : updater.actionTitle)
+            .accessibilityIdentifier("installUpdate")
+            .help(updater.failure != nil ? "查看更新问题" : updater.actionTitle)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .environment(\.colorScheme, .dark)
+        } else {
+            RecallHeaderStatus()
+        }
+    }
+}
+
 struct QuoteCard: View {
     let quote: Quote
     let textHeight: CGFloat
@@ -227,7 +254,7 @@ final class NotchPanelController {
         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
     private let container = TrackingContainer(frame: .zero)
     private var hosting: NSHostingView<QuoteCard>?
-    private var headerStatus: NSHostingView<RecallHeaderStatus>?
+    private var headerStatus: NSView?
     private var headerActions: NSHostingView<RecallHeaderActions>?
     private var headerHeight: CGFloat { max(32, connectionHeight) }
     private var contentSize = NSSize.zero
@@ -257,6 +284,7 @@ final class NotchPanelController {
     private var hotWidth: CGFloat = 160
     var onNext: (() -> Void)?
     var onOpenSettings: (() -> Void)?
+    var updater: UpdateController?
     var isPresented: Bool { state.isPresented }
     #if DEBUG
     var indicatorIsVisible: Bool { panel.isVisible && container.showsIndicator }
@@ -427,7 +455,13 @@ final class NotchPanelController {
                 renderedWidth = width
             }
             if headerStatus == nil {
-                let status = NSHostingView(rootView: RecallHeaderStatus())
+                let status: NSView
+                if let updater {
+                    status = NSHostingView(rootView: RecallHeaderUpdateStatus(updater: updater,
+                        openSettings: { [weak self] in self?.openSettings() }))
+                } else {
+                    status = NSHostingView(rootView: RecallHeaderStatus())
+                }
                 let actions = NSHostingView(rootView: RecallHeaderActions(
                     next: { [weak self] in self?.onNext?() },
                     collapse: { [weak self] in self?.collapse() },

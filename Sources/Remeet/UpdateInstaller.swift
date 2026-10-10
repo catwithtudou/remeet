@@ -319,7 +319,7 @@ enum UpdateInstaller {
                     alert.messageText = "回见更新未完成"
                     alert.informativeText = error.localizedDescription + "\n若 macOS 拦截了下载包，请到“系统设置 → 隐私与安全性”查看具体原因并单独允许。"
                     alert.addButton(withTitle: "好")
-                    if plan != nil { alert.addButton(withTitle: "查看安装记录") }
+                    if plan != nil { alert.addButton(withTitle: "查看恢复详情") }
                     if alert.runModal() == .alertSecondButtonReturn, let plan {
                         NSWorkspace.shared.activateFileViewerSelecting([plan.receipt])
                     }
