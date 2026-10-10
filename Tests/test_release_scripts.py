@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -66,11 +67,25 @@ class ReleaseScriptTests(unittest.TestCase):
                     self.assertNotEqual(self.run_script('package-release.sh').returncode, 0)
                     self.assertEqual(archive.read_bytes(), original)
                     self.assertTrue(archive.with_name(archive.name + '.sha256').exists())
+                    with zipfile.ZipFile(archive) as package:
+                        info = plistlib.loads(package.read('Remeet.app/Contents/Info.plist'))
+                        self.assertEqual(info['RemeetBuildKind'], 'release')
+                        self.assertEqual(info['RemeetReleaseTag'], 'vclean')
+                    self.assertNotIn('RemeetBuildKind', plistlib.loads((self.app / 'Contents/Info.plist').read_bytes()))
                 else:
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn('Refusing package:', result.stderr)
                     self.assertFalse(archive.exists())
                     self.assertNotIn(private_path.decode(), result.stderr)
+
+    def test_debug_app_cannot_be_marked_as_release(self):
+        self.binary.write_bytes(b'ordinary bytes')
+        (self.app / 'Contents/Info.plist').write_bytes(plistlib.dumps({
+            'CFBundleShortVersionString': '0.2.17', 'RemeetBuildConfiguration': 'debug'}))
+        result = self.run_script('package-release.sh')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('use a Release build', result.stderr)
+        self.assertFalse((self.root / 'build/releases').exists())
 
 
 if __name__ == '__main__':

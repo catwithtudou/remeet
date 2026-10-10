@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="328" viewBox="0 0 880 328" role="img" aria-labelledby="title description">
+  <title id="title">回见更新流程示意</title>
+  <desc id="description">检查更新，下载已发布安装包，处理未保存草稿，退出后重启安装。取消或保存失败时停止安装，启动失败时尝试恢复旧版。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6d7c74"/>
+    </marker>
+    <style>text {font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #293c32} .title {font-size: 20px; font-weight: 600} .body {font-size: 14px; fill: #53685b} .step {font-size: 13px; fill: #2c8160}</style>
+  </defs>
+  <rect width="880" height="328" rx="20" fill="#f2f6f3"/>
+  <text x="28" y="38" class="title">回见 · 更新流程</text>
+  <text x="28" y="62" class="body">开发实现示意 · 首次获得带更新功能的发行版仍需手动安装</text>
+  <g>
+    <rect x="28" y="88" width="190" height="140" rx="12" fill="white" stroke="#d5e4da"/>
+    <text x="44" y="116" class="step">1 · 设置 → 更新</text>
+    <text x="44" y="147" class="title">检查更新</text>
+    <text x="44" y="174" class="body">默认检查正式版</text>
+    <text x="44" y="197" class="body">预发布需明确开启</text>
+    <rect x="240" y="88" width="190" height="140" rx="12" fill="white" stroke="#d5e4da"/>
+    <text x="256" y="116" class="step">2 · GitHub Releases</text>
+    <text x="256" y="147" class="title">下载安装包</text>
+    <text x="256" y="174" class="body">匹配当前 Mac，校验附件</text>
+    <text x="256" y="197" class="body">仅使用已发布版本</text>
+    <rect x="452" y="88" width="190" height="140" rx="12" fill="white" stroke="#d5e4da"/>
+    <text x="468" y="116" class="step">3 · 重启并安装</text>
+    <text x="468" y="147" class="title">处理草稿</text>
+    <text x="468" y="174" class="body">保存或明确放弃后退出</text>
+    <text x="468" y="197" class="body">取消、保存失败则停止</text>
+    <rect x="664" y="88" width="188" height="140" rx="12" fill="white" stroke="#d5e4da"/>
+    <text x="680" y="116" class="step">4 · 旧 App 已退出</text>
+    <text x="680" y="147" class="title">安装并重启</text>
+    <text x="680" y="174" class="body">保留旧包，失败尝试回退</text>
+    <text x="680" y="197" class="body">沿用笔记和设置</text>
+    <path d="M 219 158 H 237 M 431 158 H 449 M 643 158 H 661" stroke="#6d7c74" stroke-width="1.5" marker-end="url(#arrow)"/>
+  </g>
+  <text x="28" y="268" class="body">当前安装包为 ad-hoc 签名，系统拦截时仍需在“隐私与安全性”中查看并单独允许。</text>
+  <text x="28" y="294" class="body">真实下载包的系统允许、草稿弹窗与另一台 Mac 体验仍需人工验收。</text>
+</svg>

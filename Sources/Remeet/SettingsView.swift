@@ -8,6 +8,7 @@ import RemeetCore
 
 struct SettingsView: View {
     @ObservedObject var model: RecallModel
+    @ObservedObject var updater: UpdateController
     var openContentEditor: () -> Void
     @StateObject private var loginItem = LoginItemController()
     @EditorState private var frequencyChoice = RecallFrequency.hourly
@@ -87,6 +88,7 @@ struct SettingsView: View {
                     Button("打开系统登录项设置") { SMAppService.openSystemSettingsLoginItems() }
                 }
             }
+            UpdateSettingsView(updater: updater)
             Section("回顾") {
                 Picker("回顾频率", selection: Binding(
                     get: { frequencyChoice },

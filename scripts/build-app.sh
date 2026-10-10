@@ -20,6 +20,9 @@ if [[ "$configuration" == release ]]; then
 fi
 cp Resources/Remeet.icns "$app_dir/Contents/Resources/Remeet.icns"
 cp Resources/Info.plist "$app_dir/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :RemeetBuildConfiguration $configuration" "$app_dir/Contents/Info.plist"
+source_revision="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+/usr/libexec/PlistBuddy -c "Set :RemeetSourceRevision $source_revision" "$app_dir/Contents/Info.plist"
 cp quotes.example.json "$app_dir/Contents/Resources/quotes.example.json"
 codesign --force --sign - "$app_dir"
 echo "$app_dir"

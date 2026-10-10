@@ -25,6 +25,8 @@ export REMEET_APP_OUTPUT="$PWD/build/release-candidate/Remeet.app"
 
 输出目录必须尚不存在，重复构建时更换目录名。脚本验证本地签名完整性、检查二进制构建路径，并生成 `build/releases/Remeet-<版本>-<架构>.zip` 及其 `.sha256` 文件。测试版状态使用 GitHub 预发布标记，签名与公证状态写在 Release 说明中。脚本不公证或自动上传。
 
+本地 `build-app.sh release` 仍标记 `RemeetBuildKind=development`，避免将优化配置当作发行来源。打包时仅在临时归档副本中设置 `RemeetBuildKind=release`、`RemeetReleaseTag=v<版本>`，并按当前 ad-hoc 方式重新签名；原 App 保持不变。Debug 包拒绝打包。`RemeetSourceRevision` 记录构建时的 Git HEAD；有未提交修改时，它只代表基线提交，不能独立证明归档与该提交完全一致。发行标记不代表已上传，源码新增更新功能后仍需独立升级版本号再发布，不覆盖已公开的 v0.2.17 附件。
+
 发布前解压 ZIP，核对版本与文件内容，并从归档目录验证校验值：
 
 ```sh

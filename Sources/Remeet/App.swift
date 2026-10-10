@@ -7,6 +7,11 @@ import RemeetCore
 @main
 enum RemeetApp {
     @MainActor static func main() {
+        if CommandLine.arguments.dropFirst().first == "--install-update" {
+            guard CommandLine.arguments.count == 3 else { return }
+            UpdateInstaller.run(URL(fileURLWithPath: CommandLine.arguments[2]).standardizedFileURL)
+            return
+        }
         if CommandLine.arguments.dropFirst().first == "--reload-content" {
             guard CommandLine.arguments.count == 3 else {
                 print("{\"status\":\"invalid_arguments\"}")
@@ -49,6 +54,7 @@ enum RemeetApp {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate {
     private let model = RecallModel()
+    private let updater = UpdateController()
     private lazy var editor = ContentEditorSession(model: model)
     private var statusItem: NSStatusItem?
     private var settingsWindow: NSWindow?
@@ -64,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         item.menu = menu
         statusItem = item
         model.panel.onOpenSettings = { [weak self] in self?.showSettings() }
+        updater.onQuitForInstallation = { NSApp.terminate(nil) }
         model.start()
         #if DEBUG
         if CommandLine.arguments.contains("--preview") { model.remindCurrent() }
@@ -91,6 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         menu.addItem(.separator())
         add(model.settings.isPaused ? "恢复展示" : "暂停展示", action: #selector(togglePause), to: menu)
         add("设置", action: #selector(showSettings), to: menu)
+        add("检查更新…", action: #selector(showUpdates), to: menu)
         #if DEBUG
         add("模拟定时触发（调试）", action: #selector(simulateTick), to: menu)
         #endif
@@ -111,6 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     @objc private func openDataDirectory() { model.openDataDirectory() }
     @objc private func togglePause() { model.updateSettings { $0.isPaused.toggle() } }
     @objc private func quit() { NSApp.terminate(nil) }
+    @objc private func showUpdates() { showSettings(); updater.check() }
     #if DEBUG
     @objc private func simulateTick() { model.handleScheduledEvent(.scheduled) }
     #endif
@@ -123,7 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             window.title = "回见 · Remeet 设置"
             window.identifier = NSUserInterfaceItemIdentifier("settingsWindow")
             window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: SettingsView(model: model, openContentEditor: { [weak self] in self?.showContentEditor() }))
+            window.contentView = NSHostingView(rootView: SettingsView(model: model, updater: updater, openContentEditor: { [weak self] in self?.showContentEditor() }))
             window.center()
             settingsWindow = window
         }
@@ -158,7 +167,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        canLeaveEditor(quitting: true) ? .terminateNow : .terminateCancel
+        updater.prepareToTerminate(protectDrafts: { canLeaveEditor(quitting: true) }) ? .terminateNow : .terminateCancel
     }
 
     private func canLeaveEditor(quitting: Bool) -> Bool {

@@ -56,6 +56,18 @@ REMEET_TEST_BINARY=.build/debug/Remeet REMEET_TEST_OLD_BINARY="$legacy_binary" \
 
 自动化覆盖数据校验、保存冲突、标签、调度、窗口几何及导入/恢复。真实刘海位置、焦点、锁屏唤醒、不同显示器和下载安装体验仍需实机检查。
 
+### 更新验证
+
+`UpdateTests` 和 `UpdateNetworkTests` 覆盖版本／通道／架构选择、HTTP／限流、分页、下载失败清理、草稿取消／保存冲突、helper 就绪、原子替换和失败恢复。完整 Python 测试在设置 `REMEET_TEST_BINARY` 后追加真实独立 helper 与 Launch Services 的升级／启动失败回退，使用带空格的临时路径、独立数据目录和偏好域；不操作 `/Applications` 或真实内容。夹具没有下载隔离属性，这不等于真实 Release 的 Gatekeeper 验收。
+
+真实附件下载与校验可单独运行，不安装或启动该附件：
+
+```sh
+REMEET_TEST_LIVE_RELEASE=1 ./scripts/test.sh --filter livePublishedRelease
+```
+
+此项需要网络，默认关闭。匿名 GitHub API 配额不足时，测试应报告失败；可额外传入 `REMEET_TEST_RELEASE_METADATA=<已核对的 Releases JSON 路径>`，只验证该元数据对应的真实附件下载。后者不能证明匿名 API 检查成功，App 本身没有此替代入口。更新机制与人工门槛见[更新说明](UPDATING.md)。
+
 ### 稳定性维护验收
 
 每轮维护先运行上面的完整测试，再运行 Release 构建和[打包校验](RELEASING.md)。网站同步检查 `python3 website/check.py` 和 `node --check website/dist/site.js`。测试使用临时目录和独立偏好域，不使用真实笔记。发布前审计暂存区，未暂存的修改不在 `audit-public.py` 的检查范围内。
