@@ -119,6 +119,12 @@ struct UpdateInstallation: Codable, Sendable {
     var candidate: URL { workspace.appendingPathComponent("candidate.app", isDirectory: true) }
     var backup: URL { workspace.appendingPathComponent("previous.app", isDirectory: true) }
 
+    @MainActor fileprivate var targetIsRunning: Bool {
+        NSWorkspace.shared.runningApplications.contains {
+            !$0.isTerminated && $0.bundleURL?.resolvingSymlinksInPath().path == target.path
+        }
+    }
+
     static func prepare(app: URL, candidate: URL, receipt: URL, version: String,
                         architecture: String = ReleaseUpdate.architecture, parentPID: Int32 = ProcessInfo.processInfo.processIdentifier) throws -> Self {
         let fm = FileManager.default
@@ -190,9 +196,7 @@ struct UpdateInstallation: Codable, Sendable {
     func replaceAndRestart(launch: (URL) async throws -> Void = UpdateInstaller.launch) async throws {
         try validate()
         let fm = FileManager.default
-        guard !NSWorkspace.shared.runningApplications.contains(where: {
-            !$0.isTerminated && $0.bundleURL?.resolvingSymlinksInPath().path == target.path
-        }) else { throw UpdateFailure("安装路径上的 App 仍在运行，更新未执行。") }
+        guard !targetIsRunning else { throw UpdateFailure("安装路径上的 App 仍在运行，更新未执行。") }
         try record("replacing", "正在替换 App。")
         try fm.copyItem(at: target, to: backup)
         var swapped = false
@@ -204,9 +208,7 @@ struct UpdateInstallation: Codable, Sendable {
             try record("complete", "已安装 \(version) 并重新启动。旧 App 保留在更新备份目录。")
         } catch {
             let failure = error.localizedDescription
-            if error is UpdateInstaller.LiveUpdateProcess || NSWorkspace.shared.runningApplications.contains(where: {
-                !$0.isTerminated && $0.bundleURL?.resolvingSymlinksInPath().path == target.path && $0.processIdentifier != parentPID
-            }) {
+            if error is UpdateInstaller.LiveUpdateProcess || targetIsRunning {
                 try? record("manualRecovery", "新 App 仍在运行，保留旧包于 \(backup.path)，请退出后手动处理。\(failure)")
                 throw UpdateFailure("新 App 尚未退出，未替换运行中的程序；旧包仍保留在更新目录。")
             }
@@ -293,7 +295,7 @@ enum UpdateInstaller {
                     if !["complete", "rolledBack", "manualRecovery"].contains(status ?? "") {
                         try? plan.record("failed", error.localizedDescription)
                         if parentExited, (try? UpdateFiles.fingerprint(plan.target)) == plan.oldFingerprint,
-                           !NSWorkspace.shared.runningApplications.contains(where: { !$0.isTerminated && $0.bundleURL?.resolvingSymlinksInPath().path == plan.target.path }) {
+                           !plan.targetIsRunning {
                             try? await launch(plan.target)
                         }
                     }

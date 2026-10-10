@@ -94,6 +94,59 @@ struct UpdateTests {
         return app
     }
 
+    @Test func versionAndSignatureRejectionsReachTheirOwnValidationBoundary() throws {
+        let root = try temporary()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let wrongVersion = try app(root, name: "wrong-version.app", version: "0.2.18")
+        do {
+            try UpdateFiles.validateApp(wrongVersion, version: "0.2.17")
+            Issue.record("Expected valid but mismatched version to be rejected")
+        } catch { #expect(error.localizedDescription.contains("版本")) }
+
+        let signed = try app(root, name: "signed.app", version: "0.2.17")
+        let resource = signed.appendingPathComponent("Contents/Resources/sealed.txt")
+        try FileManager.default.createDirectory(at: resource.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("original".utf8).write(to: resource)
+        try UpdateFiles.tool("/usr/bin/codesign", ["--force", "--sign", "-", signed.path])
+        try UpdateFiles.validateApp(signed, version: "0.2.17", architecture: ReleaseUpdate.architecture)
+        try Data("changed sealed resource".utf8).write(to: resource)
+        do {
+            try UpdateFiles.validateApp(signed, version: "0.2.17", architecture: ReleaseUpdate.architecture)
+            Issue.record("Expected damaged signature to be rejected")
+        } catch { #expect(error.localizedDescription.contains("codesign")) }
+    }
+
+    @Test(arguments: ["traversal", "absolute", "backslash", "symlink"])
+    func unsafeArchiveEntriesAreRejectedBeforeExtraction(kind: String) throws {
+        let root = try temporary()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let retained = root.appendingPathComponent("keep.txt")
+        let original = Data("keep original bytes".utf8)
+        try original.write(to: retained)
+        let archive = root.appendingPathComponent("unsafe.zip")
+        let entry = kind == "absolute" ? retained.path : (kind == "traversal" ? "Remeet.app/../../keep.txt"
+            : (kind == "symlink" ? "Remeet.app/Contents/link" : "Remeet.app/Contents\\keep.txt"))
+        let script = """
+        import sys, zipfile
+        with zipfile.ZipFile(sys.argv[1], 'w') as archive:
+            entry = zipfile.ZipInfo(sys.argv[2])
+            entry.create_system = 3
+            entry.external_attr = (0o120777 if sys.argv[3] == 'symlink' else 0o100644) << 16
+            archive.writestr(entry, sys.argv[4] if sys.argv[3] == 'symlink' else 'must not extract')
+        """
+        try UpdateFiles.tool("/usr/bin/python3", ["-c", script, archive.path, entry, kind, retained.path])
+        let destination = root.appendingPathComponent("unpacked", isDirectory: true)
+        do {
+            try UpdateFiles.extract(archive, to: destination)
+            Issue.record("Expected unsafe archive to be rejected before extraction")
+        } catch {
+            #expect(error is UpdateFailure)
+            #expect(error.localizedDescription.contains(kind == "symlink" ? "符号链接" : "无效路径"))
+        }
+        #expect(!FileManager.default.fileExists(atPath: destination.path))
+        #expect(try Data(contentsOf: retained) == original)
+    }
+
     func installation(_ root: URL) throws -> UpdateInstallation {
         try UpdateInstallation.prepare(app: app(root, name: "Remeet.app", version: "0.2.16"),
                                        candidate: app(root, name: "incoming.app", version: "0.2.17"),
