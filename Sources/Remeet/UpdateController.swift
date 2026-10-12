@@ -215,7 +215,8 @@ struct UpdateSettingsView: View {
                 }
             }
             DisclosureGroup("测试版本") {
-                Toggle("接收预发布版本", isOn: Binding(get: { updater.includePrereleases }, set: updater.setIncludePrereleases))
+                Toggle("接收预发布版本", isOn: Binding(get: { updater.includePrereleases },
+                    set: { value in updater.setIncludePrereleases(value) }))
                     .disabled(updater.busy)
                 Text("预发布版本用于测试，默认关闭。")
                     .font(.caption).foregroundStyle(.secondary)
