@@ -98,7 +98,8 @@ struct UpdateNetworkTests {
             updater.performPrimaryAction() // "Later" keeps the download for another look at the steps.
             #expect(quits == 0 && guides == [cached, cached] && updater.pendingInstallation == nil)
             #expect(try FileManager.default.contentsOfDirectory(atPath: root.path).allSatisfy { !$0.hasPrefix(".remeet-update-") })
-            try FileManager.default.removeItem(at: cached) // As if a cache cleaner removed the download.
+            // As if a cache cleaner removed the download; this also leaves nothing for teardown.
+            try FileManager.default.removeItem(at: cached.deletingLastPathComponent().deletingLastPathComponent())
             updater.performPrimaryAction()
             #expect(guides.count == 2 && updater.downloadedApp == nil && updater.failure != nil)
             #expect(updater.actionTitle == "下载更新")
