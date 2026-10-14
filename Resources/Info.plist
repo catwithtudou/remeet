@@ -7,8 +7,8 @@
     <key>CFBundleDisplayName</key><string>回见 · Remeet</string>
     <key>CFBundleIconFile</key><string>Remeet.icns</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.2.18</string>
-    <key>CFBundleVersion</key><string>19</string>
+    <key>CFBundleShortVersionString</key><string>0.2.19</string>
+    <key>CFBundleVersion</key><string>20</string>
     <key>RemeetBuildKind</key><string>development</string>
     <key>RemeetBuildConfiguration</key><string>$(CONFIGURATION)</string>
     <key>RemeetSourceRevision</key><string>unknown</string>
