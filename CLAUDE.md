@@ -100,7 +100,7 @@ CI builds the `v0.2.14` tag and sets `REMEET_TEST_OLD_BINARY` to test replacing 
 
 - **SwiftUI `Binding` setters:** use explicit closures (`set: { value in model.setX(value) }`) rather than passing method references. Method references have crashed the Swift 6.1 compiler that CI (macOS 15) uses, even when they build locally. This has been fixed twice already.
 - **Swift tests use Swift Testing:** `@Test`/`#expect`, with `@testable import Remeet` / `RemeetCore`. `NativeWindowTests` needs a logged-in graphical session.
-- **No real data in tests:** tests use temp dirs and isolated defaults suites. Never point tests or screenshots at real notes.
+- **No real data in tests:** tests use temp dirs and isolated defaults suites. Never point tests or screenshots at real notes. Create Swift suites with `testDefaultsSuite(_:)` and Python suites as a path in the test's temp dir: cfprefsd writes an empty plist back after a named suite is removed, which would leave files in `~/Library/Preferences`.
 - **Build kinds:** `build-app.sh release` still marks the app `RemeetBuildKind=development`. Only `package-release.sh` stamps `release` and the tag, on a re-signed archive copy. Debug apps are refused for packaging. Version and build number live in `Resources/Info.plist`.
 
 ## Public-repo hygiene

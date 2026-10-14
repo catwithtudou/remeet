@@ -27,7 +27,8 @@ class UpdateInstallationTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory(prefix='Remeet update integration-')
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name).resolve()
-        self.suite = 'local.Remeet.update-integration.' + uuid.uuid4().hex
+        # An absolute-path suite keeps cfprefsd's leftover empty plist out of ~/Library/Preferences.
+        self.suite = str(self.root / 'preferences')
         self.env = dict(os.environ, REMEET_DATA_DIR=str(self.root / 'data'),
                         REMEET_DEFAULTS_SUITE=self.suite, REMEET_UPDATE_TEST_NO_ALERT='1')
         self.processes = []

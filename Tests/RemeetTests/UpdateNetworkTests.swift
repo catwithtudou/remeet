@@ -36,7 +36,7 @@ struct UpdateNetworkTests {
     func oneClickUpdateDownloadsThenQuitsOrGuidesReplacement(outcome: String, automatic: Bool) async throws {
         let fixture = UpdateTests()
         let root = try fixture.temporary()
-        let suite = "local.Remeet.update-action.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("local.Remeet.update-action")
         let defaults = try #require(UserDefaults(suiteName: suite))
         let target = try fixture.app(root, name: "installed.app", version: "0.2.17")
         let incoming = try fixture.app(root, name: "incoming/Remeet.app", version: "0.2.18")

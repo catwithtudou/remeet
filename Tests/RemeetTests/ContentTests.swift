@@ -116,7 +116,7 @@ func rejectsEntireInvalidFile(input: String) {
 }
 
 @Test func preferencesPersistAndInvalidValuesFallBack() throws {
-    let suite = "Remeet.tests.\(UUID().uuidString)"
+    let suite = testDefaultsSuite("Remeet.tests")
     let defaults = try #require(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
     let store = PreferenceStore(defaults: defaults)

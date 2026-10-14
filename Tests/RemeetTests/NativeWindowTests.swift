@@ -8,7 +8,7 @@ struct NativeWindowTests {
     @Test func changeDetectionProtectsDraftsAndAcceptsExactReverts() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let suite = "Remeet.change-detection.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("Remeet.change-detection")
         let defaults = try #require(UserDefaults(suiteName: suite))
         let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
         defer {
@@ -67,7 +67,7 @@ struct NativeWindowTests {
     func workspaceRecoveryHonorsAllInactiveReasonsAndPause(paused: Bool) throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let suite = "Remeet.workspace.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("Remeet.workspace")
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.set(false, forKey: "showIndicator")
         defaults.set(false, forKey: "hoverPresent")
@@ -123,7 +123,7 @@ struct NativeWindowTests {
     func contentScaleRoundTrip(count: Int) throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let suite = "Remeet.scale.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("Remeet.scale")
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.set(false, forKey: "showIndicator")
         defaults.set(false, forKey: "hoverPresent")
@@ -190,7 +190,7 @@ struct NativeWindowTests {
     @Test func savedExportIgnoresDraftsAndFiltersAndRoundTripsThroughImport() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let suite = "Remeet.saved-export.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("Remeet.saved-export")
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.set(false, forKey: "showIndicator")
         defaults.set(false, forKey: "hoverPresent")
@@ -252,7 +252,7 @@ struct NativeWindowTests {
     @Test func savedExportCancellationAndExternalChangesPreserveTheEditingBaseline() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let suite = "Remeet.saved-export-conflict.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("Remeet.saved-export-conflict")
         let defaults = try #require(UserDefaults(suiteName: suite))
         let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
         defer {
@@ -295,7 +295,7 @@ struct NativeWindowTests {
     func savedExportFailuresKeepSourceDestinationAndDrafts(reason: String) throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let suite = "Remeet.saved-export-failure.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("Remeet.saved-export-failure")
         let defaults = try #require(UserDefaults(suiteName: suite))
         let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
         defer {
@@ -351,7 +351,7 @@ struct NativeWindowTests {
     @Test func jsonImportCancelConfirmAndRepeatPreserveContentAndSchedule() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let suite = "Remeet.import-tests.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("Remeet.import-tests")
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.set(false, forKey: "hoverPresent")
         defaults.set(false, forKey: "showIndicator")
@@ -415,7 +415,7 @@ struct NativeWindowTests {
     func jsonImportFailuresRetainPreviewDraftsAndLivePool(reason: String) throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let suite = "Remeet.import-failures.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("Remeet.import-failures")
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.set(false, forKey: "showIndicator")
         let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
@@ -476,7 +476,7 @@ struct NativeWindowTests {
     @Test func jsonImportCreatesMissingTargetOnlyAfterConfirmation() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let suite = "Remeet.import-create.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("Remeet.import-create")
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.set(false, forKey: "showIndicator")
         let model = RecallModel(dataDirectory: directory.appendingPathComponent("data"), userDefaults: defaults)
@@ -500,7 +500,7 @@ struct NativeWindowTests {
     @Test func jsonImportRejectsDirtyInvalidAndStaleInputsWithoutLosingEdits() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let suite = "Remeet.import-guards.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("Remeet.import-guards")
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.set(false, forKey: "showIndicator")
         let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
@@ -541,7 +541,7 @@ struct NativeWindowTests {
     func externalChangesDuringSaveConfirmationPreserveDrafts(removeFile: Bool) throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let suite = "Remeet.confirmation-conflict.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("Remeet.confirmation-conflict")
         let defaults = try #require(UserDefaults(suiteName: suite))
         let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
         defer {
@@ -586,7 +586,7 @@ struct NativeWindowTests {
     @Test func saveWarningsProtectAllDraftsAndCloseUsesTheSameConfirmation() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let suite = "Remeet.save-warning-tests.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("Remeet.save-warning-tests")
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.set(false, forKey: "hoverPresent")
         defaults.set(false, forKey: "showIndicator")
@@ -648,7 +648,7 @@ struct NativeWindowTests {
     @Test func conflictingDraftExportPreservesAllEntriesAndDoesNotResolveTheConflict() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let suite = "Remeet.draft-export-tests.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("Remeet.draft-export-tests")
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.set(false, forKey: "hoverPresent")
         defaults.set(false, forKey: "showIndicator")
@@ -713,7 +713,7 @@ struct NativeWindowTests {
     @Test func draftExportFailureKeepsDraftUndoAndExistingFile() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let suite = "Remeet.draft-export-failure.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("Remeet.draft-export-failure")
         let defaults = try #require(UserDefaults(suiteName: suite))
         let model = RecallModel(dataDirectory: directory, userDefaults: defaults)
         defer {
@@ -747,7 +747,7 @@ struct NativeWindowTests {
     @Test func deletedDraftsUndoInOrderAndBackupRecoveryRemainsAnExplicitSave() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let suite = "Remeet.recovery-tests.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("Remeet.recovery-tests")
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.set(false, forKey: "hoverPresent")
         defaults.set(false, forKey: "showIndicator")
@@ -840,7 +840,7 @@ struct NativeWindowTests {
     @Test func tagsOrganizeDraftsWithoutFilteringTheRecallPool() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let suite = "Remeet.tag-tests.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("Remeet.tag-tests")
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.set(false, forKey: "hoverPresent")
         defaults.set(false, forKey: "showIndicator")
@@ -937,7 +937,7 @@ struct NativeWindowTests {
     @Test func contentSearchKeepsDraftsAndPreviewDoesNotChangeRecallSelection() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let suite = "Remeet.content-browser-tests.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("Remeet.content-browser-tests")
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.set(false, forKey: "hoverPresent")
         defaults.set(false, forKey: "showIndicator")
@@ -1164,7 +1164,7 @@ struct NativeWindowTests {
     @Test func editorCloseProtectsDraftAndRequiresSuccessfulSave() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let suite = "Remeet.editor-tests.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("Remeet.editor-tests")
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer {
             try? FileManager.default.removeItem(at: directory)
@@ -1269,7 +1269,7 @@ struct NativeWindowTests {
     @Test func manualActionsPauseReloadAndScheduledRecovery() throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let suite = "Remeet.native-tests.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("Remeet.native-tests")
         let defaults = try #require(UserDefaults(suiteName: suite))
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let file = directory.appendingPathComponent("quotes.json")

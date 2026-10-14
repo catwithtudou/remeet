@@ -117,7 +117,7 @@ struct UpdateTests {
     }
 
     @Test func manualReplacementRevealsFinderOnlyAfterDraftsAllowQuit() throws {
-        let suite = "local.Remeet.update-manual.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("local.Remeet.update-manual")
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let updater = UpdateController(defaults: defaults)
@@ -248,7 +248,7 @@ struct UpdateTests {
     @Test func cancellationAndSaveConflictKeepDraftsAndNeverStartHelper() throws {
         let root = try temporary()
         defer { try? FileManager.default.removeItem(at: root) }
-        let suite = "local.Remeet.update-test.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("local.Remeet.update-test")
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let model = RecallModel(dataDirectory: root.appendingPathComponent("data"), userDefaults: defaults)
@@ -276,7 +276,7 @@ struct UpdateTests {
     func draftSaveMustFinishBeforeHelperStartsAndBackupFailurePreventsQuit(failBackup: Bool) throws {
         let root = try temporary()
         defer { try? FileManager.default.removeItem(at: root) }
-        let suite = "local.Remeet.update-save.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("local.Remeet.update-save")
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let model = RecallModel(dataDirectory: root.appendingPathComponent("data"), userDefaults: defaults)
@@ -317,7 +317,7 @@ struct UpdateTests {
     @Test func helperFailurePreventsQuitAndChannelRequiresExplicitOptIn() throws {
         let root = try temporary()
         defer { try? FileManager.default.removeItem(at: root) }
-        let suite = "local.Remeet.update-test.\(UUID().uuidString)"
+        let suite = testDefaultsSuite("local.Remeet.update-test")
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let updater = UpdateController(defaults: defaults)

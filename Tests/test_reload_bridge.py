@@ -32,13 +32,21 @@ class ReloadBridgeTests(unittest.TestCase):
         (self.bundle / 'Contents/Info.plist').write_bytes(plistlib.dumps(info))
         self.target = self.root / 'data/quotes.json'
         self.target.parent.mkdir()
-        self.suite = info['CFBundleIdentifier'] + '.preferences'
-        self.addCleanup(subprocess.run, ['defaults', 'delete', self.suite], capture_output=True)
+        # An absolute-path suite keeps cfprefsd's leftover empty plist out of ~/Library/Preferences.
+        self.suite = str(self.root / 'preferences')
+        self.addCleanup(self.remove_preferences, info['CFBundleIdentifier'])
         for key in ['showIndicator', 'autoPresent', 'hoverPresent']:
             subprocess.run(['defaults', 'write', self.suite, key, '-bool', 'false'], check=True)
         self.env = dict(os.environ, REMEET_DATA_DIR=str(self.target.parent), REMEET_DEFAULTS_SUITE=self.suite)
         self.process = None
         self.addCleanup(self.stop_app)
+
+    def remove_preferences(self, bundle_id):
+        # The fixture App also writes AppKit state to its own bundle domain. After the App has
+        # exited, `defaults delete` still leaves an empty plist, so remove that file as well.
+        subprocess.run(['defaults', 'delete', self.suite], capture_output=True)
+        subprocess.run(['defaults', 'delete', bundle_id], capture_output=True)
+        (Path.home() / 'Library/Preferences' / (bundle_id + '.plist')).unlink(missing_ok=True)
 
     def stop_app(self):
         if self.process is not None:
