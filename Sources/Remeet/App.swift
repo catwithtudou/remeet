@@ -72,6 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         model.panel.onOpenSettings = { [weak self] in self?.showSettings() }
         model.panel.updater = updater
         updater.onQuitForInstallation = { NSApp.terminate(nil) }
+        updater.onManualInstallReady = { [weak self] app in self?.showManualInstall(app) }
         model.start()
         updater.check()
         #if DEBUG
@@ -128,6 +129,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     #if DEBUG
     @objc private func simulateTick() { model.handleScheduledEvent(.scheduled) }
     #endif
+
+    /// Finder replacement keeps quarantine and avoids App Translocation; quitting still protects drafts.
+    private func showManualInstall(_ app: URL) {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "回见 \(updater.available?.release.tagName ?? "新版本") 已下载"
+        alert.informativeText = """
+        当前版本没有 Apple 开发者签名，不能自动替换。点击“显示新版本并退出”后，回见先处理未保存的修改并退出，Finder 再选中已校验的 Remeet.app。把它拖到“\(updater.installFolderName)”，选择替换旧版本，再重新打开。
+
+        如果 macOS 提示无法打开，到“系统设置 → 隐私与安全性”点击“仍要打开”。笔记和设置都会保留。
+        """
+        alert.addButton(withTitle: "显示新版本并退出")
+        alert.addButton(withTitle: "稍后")
+        alert.buttons[1].keyEquivalent = "\u{1b}"
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        updater.queueManualInstall(app)
+        NSApp.terminate(nil)
+    }
 
     @objc private func showSettings() {
         model.panel.collapse()

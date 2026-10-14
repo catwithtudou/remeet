@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="880" height="328" viewBox="0 0 880 328" role="img" aria-labelledby="title description">
   <title id="title">回见更新流程示意</title>
-  <desc id="description">菜单与回顾卡片提示更新，点击更新并重启，自动下载校验并处理未保存草稿，退出后安装。取消或保存失败时停止，启动失败时尝试恢复旧版。</desc>
+  <desc id="description">菜单与回顾卡片提示更新，点击下载更新，下载校验后说明替换步骤；处理未保存草稿并退出后，在 Finder 中把新版本拖入原文件夹替换。取消或保存失败时不退出。</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#6d7c74"/>
@@ -9,7 +9,7 @@
   </defs>
   <rect width="880" height="328" rx="20" fill="#f2f6f3"/>
   <text x="28" y="38" class="title">回见 · 更新流程</text>
-  <text x="28" y="62" class="body">开发实现示意 · 首次获得带更新功能的发行版仍需手动安装</text>
+  <text x="28" y="62" class="body">开发实现示意 · 未签名构建不自动替换，下载校验后手动替换</text>
   <g>
     <rect x="28" y="88" width="190" height="140" rx="12" fill="white" stroke="#d5e4da"/>
     <text x="44" y="116" class="step">1 · 菜单与回顾卡片</text>
@@ -17,10 +17,10 @@
     <text x="44" y="174" class="body">启动时静默检查一次</text>
     <text x="44" y="197" class="body">测试版本需明确开启</text>
     <rect x="240" y="88" width="190" height="140" rx="12" fill="white" stroke="#d5e4da"/>
-    <text x="256" y="116" class="step">2 · 更新并重启</text>
-    <text x="256" y="147" class="title">自动下载</text>
-    <text x="256" y="174" class="body">无需查找安装包位置</text>
-    <text x="256" y="197" class="body">后台完成下载与校验</text>
+    <text x="256" y="116" class="step">2 · 下载更新</text>
+    <text x="256" y="147" class="title">下载并校验</text>
+    <text x="256" y="174" class="body">核对大小与 SHA-256</text>
+    <text x="256" y="197" class="body">保留系统下载隔离属性</text>
     <rect x="452" y="88" width="190" height="140" rx="12" fill="white" stroke="#d5e4da"/>
     <text x="468" y="116" class="step">3 · 下载完成后</text>
     <text x="468" y="147" class="title">处理草稿</text>
@@ -28,11 +28,11 @@
     <text x="468" y="197" class="body">取消、保存失败则停止</text>
     <rect x="664" y="88" width="188" height="140" rx="12" fill="white" stroke="#d5e4da"/>
     <text x="680" y="116" class="step">4 · 旧 App 已退出</text>
-    <text x="680" y="147" class="title">安装并重启</text>
-    <text x="680" y="174" class="body">保留旧包，失败尝试回退</text>
-    <text x="680" y="197" class="body">沿用笔记和设置</text>
+    <text x="680" y="147" class="title">手动替换</text>
+    <text x="680" y="174" class="body">Finder 选中新版本</text>
+    <text x="680" y="197" class="body">拖入原文件夹替换旧版</text>
     <path d="M 219 158 H 237 M 431 158 H 449 M 643 158 H 661" stroke="#6d7c74" stroke-width="1.5" marker-end="url(#arrow)"/>
   </g>
-  <text x="28" y="268" class="body">当前安装包为 ad-hoc 签名，系统拦截时仍需在“隐私与安全性”中查看并单独允许。</text>
+  <text x="28" y="268" class="body">当前安装包为 ad-hoc 签名，打开新版本时如被拦截，需在“隐私与安全性”中单独允许。</text>
   <text x="28" y="294" class="body">真实下载包的系统允许、草稿弹窗与另一台 Mac 体验仍需人工验收。</text>
 </svg>

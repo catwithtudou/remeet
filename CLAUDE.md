@@ -77,7 +77,7 @@ REMEET_DATA_DIR="$PWD/build/qa-data" REMEET_DEFAULTS_SUITE=local.Remeet.qa \
 - `ReleaseUpdate.swift` handles the GitHub Releases client, semver and channel selection, paging through the releases list instead of using `latest`.
 - `UpdateController` handles UI state, download and verification.
 - `UpdateInstaller.swift` (`UpdateFiles`, the helper process, `RENAME_SWAP`, rollback) handles installation.
-- Builds without a Team ID (all current ad-hoc releases) do not auto-install. They download, verify and then guide a manual Finder replacement. Quarantine is never removed and Gatekeeper is never bypassed.
+- Automatic replacement is off (`UpdateController.installsAutomatically` defaults to `false`; only tests turn it on). Current ad-hoc builds download, verify, then guide a manual Finder replacement; Finder is revealed only after draft protection allows quitting. Quarantine is never removed and Gatekeeper is never bypassed. Signing alone must not re-enable it (see `docs/UPDATING.md`).
 - Read `docs/UPDATING.md` before changing this flow.
 
 **Other parts of the repo.**

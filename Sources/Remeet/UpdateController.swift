@@ -13,15 +13,22 @@ final class UpdateController: ObservableObject {
     @Published private(set) var includePrereleases: Bool
     let currentVersion: String
     let development: Bool
+    /// Off in production: a quarantined App swapped into place is stopped by Gatekeeper and
+    /// App Translocation, even with a Team ID. Downloads are verified, then replaced in Finder.
+    /// Enable only with the signed-build checks described in docs/UPDATING.md.
+    let installsAutomatically: Bool
     private let defaults: UserDefaults
     private let client: ReleaseClient
     private let appURL: URL
     private var operation: Task<Void, Never>?
     private var downloadDirectory: URL?
     private(set) var pendingInstallation: UpdateInstallation?
+    private(set) var pendingManualInstall: URL?
     var onQuitForInstallation: (() -> Void)?
+    var onManualInstallReady: ((URL) -> Void)?
 
-    init(bundle: Bundle = .main, defaults: UserDefaults? = nil, client: ReleaseClient = ReleaseClient()) {
+    init(bundle: Bundle = .main, defaults: UserDefaults? = nil, client: ReleaseClient = ReleaseClient(),
+         installsAutomatically: Bool = false) {
         var preferences = defaults ?? .standard
         #if DEBUG
         if defaults == nil, let suite = ProcessInfo.processInfo.environment["REMEET_DEFAULTS_SUITE"],
@@ -34,19 +41,50 @@ final class UpdateController: ObservableObject {
         let kind = bundle.object(forInfoDictionaryKey: "RemeetBuildKind") as? String
         development = kind == "development" || kind == nil
         includePrereleases = preferences.bool(forKey: "updateIncludePrereleases")
+        self.installsAutomatically = installsAutomatically
+    }
+
+    /// The folder to replace in, so an App kept outside /Applications is not duplicated.
+    var installFolderName: String { Self.installFolderName(for: appURL) }
+
+    static func installFolderName(for app: URL) -> String {
+        let folder = app.deletingLastPathComponent().path
+        if folder == "/Applications" || folder.contains("/AppTranslocation/") { return "应用程序" }
+        return (folder as NSString).abbreviatingWithTildeInPath
     }
 
     var actionTitle: String {
         if busy { return available == nil ? "正在检查…" : "正在下载…" }
-        if downloadedApp != nil { return "重启更新" }
-        return available == nil ? "检查更新" : "更新并重启"
+        if downloadedApp != nil { return installsAutomatically ? "重启更新" : "安装更新" }
+        if available == nil { return "检查更新" }
+        return installsAutomatically ? "更新并重启" : "下载更新"
     }
 
     func performPrimaryAction() {
         guard !busy, pendingInstallation == nil else { return }
-        if downloadedApp != nil { install() }
+        if downloadedApp != nil { installDownload() }
         else if available != nil { download() }
         else { check() }
+    }
+
+    private func installDownload() {
+        guard let app = downloadedApp else { return }
+        if installsAutomatically { install(); return }
+        do {
+            // A cache cleaner may remove or change the download while the user chose "later".
+            try UpdateFiles.validateApp(app, version: available.map { String($0.release.tagName.drop(while: { $0 == "v" })) },
+                                        architecture: available?.architecture)
+            onManualInstallReady?(app)
+        } catch {
+            downloadedApp = nil
+            status = "下载的新版本已不可用，请重新下载。"
+            failure = error.localizedDescription
+        }
+    }
+
+    /// Finder is shown only once drafts allow quitting, so the running App is never replaced.
+    func queueManualInstall(_ app: URL) {
+        pendingManualInstall = app
     }
 
     func setIncludePrereleases(_ include: Bool) {
@@ -109,7 +147,7 @@ final class UpdateController: ObservableObject {
                 try Task.checkCancellation()
                 downloadDirectory = directory
                 downloadedApp = candidate
-                status = "更新已就绪。"
+                status = installsAutomatically ? "更新已就绪。" : "已下载。点击“安装更新”查看替换步骤。"
             } catch {
                 try? FileManager.default.removeItem(at: directory)
                 if error is CancellationError || (error as? URLError)?.code == .cancelled {
@@ -121,7 +159,7 @@ final class UpdateController: ObservableObject {
             }
             busy = false
             operation = nil
-            if downloadedApp != nil { install() }
+            if downloadedApp != nil { installDownload() }
         }
     }
 
@@ -131,7 +169,7 @@ final class UpdateController: ObservableObject {
         if let directory = downloadDirectory { NSWorkspace.shared.activateFileViewerSelecting([directory]) }
     }
 
-    func install() {
+    private func install() {
         guard !busy, pendingInstallation == nil,
               let update = available, let candidate = downloadedApp, let directory = downloadDirectory else { return }
         failure = nil
@@ -154,14 +192,24 @@ final class UpdateController: ObservableObject {
 
     // Used for every AppKit termination request, including Command-Q and update installation.
     func prepareToTerminate(protectDrafts: () -> Bool,
-                            startHelper: (UpdateInstallation) throws -> Void = { _ = try $0.startHelper() }) -> Bool {
+                            startHelper: (UpdateInstallation) throws -> Void = { _ = try $0.startHelper() },
+                            reveal: (URL) -> Void = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }) -> Bool {
         guard protectDrafts() else {
             if let pendingInstallation {
                 try? FileManager.default.removeItem(at: pendingInstallation.workspace)
                 self.pendingInstallation = nil
                 status = "已取消安装，未保存的草稿仍保留在当前 App。"
             }
+            if pendingManualInstall != nil {
+                pendingManualInstall = nil
+                status = "已取消退出，未保存的草稿仍保留。新版本仍在下载目录，可再次点击“安装更新”。"
+            }
             return false
+        }
+        if let app = pendingManualInstall {
+            pendingManualInstall = nil
+            reveal(app)
+            return true
         }
         guard let plan = pendingInstallation else { return true }
         do {

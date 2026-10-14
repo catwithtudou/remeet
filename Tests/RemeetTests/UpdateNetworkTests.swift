@@ -32,8 +32,8 @@ struct UpdateNetworkTests {
         try #require(!updater.busy)
     }
 
-    @Test(arguments: ["download", "cancel", "failure"]) @MainActor
-    func oneClickUpdateDownloadsThenRequestsProtectedQuit(outcome: String) async throws {
+    @Test(arguments: zip(["download", "cancel", "failure", "download"], [true, true, true, false])) @MainActor
+    func oneClickUpdateDownloadsThenQuitsOrGuidesReplacement(outcome: String, automatic: Bool) async throws {
         let fixture = UpdateTests()
         let root = try fixture.temporary()
         let suite = "local.Remeet.update-action.\(UUID().uuidString)"
@@ -56,9 +56,11 @@ struct UpdateNetworkTests {
             if outcome == "failure" { return (500, Data()) }
             return (200, request.url!.path.hasSuffix(".sha256") ? checksum : bytes)
         }
-        let updater = UpdateController(bundle: try #require(Bundle(url: target)), defaults: defaults, client: client())
+        let updater = UpdateController(bundle: try #require(Bundle(url: target)), defaults: defaults, client: client(),
+                                       installsAutomatically: automatic)
         defer {
             updater.onQuitForInstallation = nil
+            updater.onManualInstallReady = nil
             if let app = updater.downloadedApp {
                 try? FileManager.default.removeItem(at: app.deletingLastPathComponent().deletingLastPathComponent())
             }
@@ -74,19 +76,34 @@ struct UpdateNetworkTests {
                 Issue.record("Cancelled drafts must never start the installer")
             }))
         }
+        var guides: [URL] = []
+        updater.onManualInstallReady = { guides.append($0) }
         #expect(updater.actionTitle == "检查更新")
         updater.check() // The startup check may discover an update, but cannot download or quit.
         try await waitForOperation(updater)
         #expect(updater.available?.release.tagName == "v0.2.18")
         #expect(updater.downloadedApp == nil && quits == 0 && updater.failure == nil)
-        #expect(updater.actionTitle == "更新并重启")
+        #expect(updater.actionTitle == (automatic ? "更新并重启" : "下载更新"))
         updater.performPrimaryAction()
         if outcome == "cancel" { updater.cancel() }
         try await waitForOperation(updater)
         #expect(try UpdateFiles.fingerprint(target) == original)
         #expect(updater.pendingInstallation == nil)
-        if outcome == "download" {
-            #expect(quits == 1 && updater.failure == nil)
+        if outcome == "download" && !automatic {
+            // Ad-hoc builds stop after verification: no installer workspace, helper or quit.
+            let cached = try #require(updater.downloadedApp)
+            #expect(quits == 0 && guides == [cached] && updater.failure == nil)
+            #expect(try cached.resourceValues(forKeys: [.quarantinePropertiesKey]).quarantineProperties != nil)
+            #expect(updater.actionTitle == "安装更新")
+            updater.performPrimaryAction() // "Later" keeps the download for another look at the steps.
+            #expect(quits == 0 && guides == [cached, cached] && updater.pendingInstallation == nil)
+            #expect(try FileManager.default.contentsOfDirectory(atPath: root.path).allSatisfy { !$0.hasPrefix(".remeet-update-") })
+            try FileManager.default.removeItem(at: cached) // As if a cache cleaner removed the download.
+            updater.performPrimaryAction()
+            #expect(guides.count == 2 && updater.downloadedApp == nil && updater.failure != nil)
+            #expect(updater.actionTitle == "下载更新")
+        } else if outcome == "download" {
+            #expect(quits == 1 && guides.isEmpty && updater.failure == nil)
             let cached = try #require(updater.downloadedApp)
             #expect(updater.actionTitle == "重启更新")
             updater.performPrimaryAction() // Retry after cancelling the draft dialog reuses the download.

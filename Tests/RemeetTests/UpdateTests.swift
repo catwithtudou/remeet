@@ -116,6 +116,32 @@ struct UpdateTests {
         } catch { #expect(error.localizedDescription.contains("codesign")) }
     }
 
+    @Test func manualReplacementRevealsFinderOnlyAfterDraftsAllowQuit() throws {
+        let suite = "local.Remeet.update-manual.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let updater = UpdateController(defaults: defaults)
+        #expect(!updater.installsAutomatically)
+        let app = URL(fileURLWithPath: "/tmp/Remeet.app")
+        var revealed: [URL] = []
+        updater.queueManualInstall(app)
+        #expect(!updater.prepareToTerminate(protectDrafts: { false }, reveal: { revealed.append($0) }))
+        #expect(revealed.isEmpty && updater.pendingManualInstall == nil && updater.status.contains("已取消退出"))
+        #expect(updater.prepareToTerminate(protectDrafts: { true }, reveal: { revealed.append($0) })) // Not replayed.
+        #expect(revealed.isEmpty)
+        updater.queueManualInstall(app)
+        #expect(updater.prepareToTerminate(protectDrafts: { true }, reveal: { revealed.append($0) }))
+        #expect(revealed == [app] && updater.pendingManualInstall == nil)
+    }
+
+    @Test func manualReplacementNamesTheFolderTheAppRunsFrom() {
+        let home = NSHomeDirectory()
+        #expect(UpdateController.installFolderName(for: URL(fileURLWithPath: "/Applications/Remeet.app")) == "应用程序")
+        #expect(UpdateController.installFolderName(for: URL(fileURLWithPath: home + "/Applications/Remeet.app")) == "~/Applications")
+        #expect(UpdateController.installFolderName(for: URL(fileURLWithPath:
+            "/private/var/folders/x/T/AppTranslocation/A1/d/Remeet.app")) == "应用程序")
+    }
+
     @Test(arguments: ["traversal", "absolute", "backslash", "symlink"])
     func unsafeArchiveEntriesAreRejectedBeforeExtraction(kind: String) throws {
         let root = try temporary()
