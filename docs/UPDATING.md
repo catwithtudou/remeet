@@ -16,7 +16,7 @@
 - 使用 GitHub Releases 的分页列表，按语义版本选择当前通道最高版本，不使用只返回正式版的 `latest` 接口。草稿 Release 被排除；即使 GitHub 未标记，带语义预发布后缀的标签也不进入正式通道。
 - 正常发行构建只提示更高版本；开发或来源未标记的构建可下载同版本号的已发布附件。不会自动降级，也不以最新源码构建代替发行包。
 - `RemeetBuildKind` 区分开发构建和发行构建。`build-app.sh release` 是优化配置，仍标记为开发构建；`package-release.sh` 只在归档副本中标记发行构建、写入 Release 标签并重新进行 ad-hoc 签名，不修改原 App。标记不证明包已在 GitHub 发布。
-- 0.2.18 采用普通 Release，默认更新通道可以发现；0.2.14 至 0.2.17 保留原有预发布标记。当前提供 arm64 包，尚无 Intel 附件；发布状态以 [GitHub Releases](https://github.com/catwithtudou/remeet/releases) 为准。
+- 0.2.19 采用普通 Release，默认更新通道可以发现；0.2.14 至 0.2.17 保留原有预发布标记。当前提供 arm64 包，尚无 Intel 附件；发布状态以 [GitHub Releases](https://github.com/catwithtudou/remeet/releases) 为准。
 
 ## 下载与校验
 
