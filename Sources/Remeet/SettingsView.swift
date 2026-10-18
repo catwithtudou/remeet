@@ -599,6 +599,10 @@ struct ContentEditorView: View {
     }
 
     var body: some View {
+        // Every keystroke re-renders this whole view; derive these once per render, not at each use.
+        let dirty = editor.dirty
+        let tags = editor.availableTags
+        let filtered = editor.filteredDrafts
         VStack(spacing: 0) {
             HStack {
                 Text("我的内容").font(.title2.bold())
@@ -620,15 +624,15 @@ struct ContentEditorView: View {
                     Picker("标签", selection: $editor.tagFilter) {
                         Text("全部").tag(ContentEditorSession.TagFilter.all)
                         Text("默认（无标签）").tag(ContentEditorSession.TagFilter.untagged)
-                        ForEach(editor.availableTags, id: \.self) { tag in
+                        ForEach(tags, id: \.self) { tag in
                             Text("#\(tag)").tag(ContentEditorSession.TagFilter.tag(tag))
                         }
-                        if case .tag(let tag) = editor.tagFilter, !editor.availableTags.contains(tag) {
+                        if case .tag(let tag) = editor.tagFilter, !tags.contains(tag) {
                             Text("#\(tag)（0 条）").tag(ContentEditorSession.TagFilter.tag(tag))
                         }
                     }.padding(.horizontal, 12).accessibilityLabel("按标签筛选")
                     List(selection: $editor.selectedID) {
-                        ForEach(editor.filteredDrafts) { draft in
+                        ForEach(filtered) { draft in
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "新笔记" : draft.text)
                                     .lineLimit(2)
@@ -640,7 +644,7 @@ struct ContentEditorView: View {
                             }.padding(.vertical, 5).tag(draft.id)
                         }
                     }.listStyle(.sidebar)
-                    Text("\(editor.filteredDrafts.count) / \(editor.drafts.count) 条")
+                    Text("\(filtered.count) / \(editor.drafts.count) 条")
                         .font(.caption).foregroundStyle(.secondary).padding(.bottom, 10)
                 }.frame(minWidth: 220, idealWidth: 260, maxWidth: 340)
                 VStack(alignment: .leading, spacing: 12) {
@@ -682,22 +686,22 @@ struct ContentEditorView: View {
                                     .disabled(draft.tagInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                                     .accessibilityLabel("添加标签")
                                 Menu("已有标签") {
-                                    ForEach(editor.availableTags, id: \.self) { tag in
+                                    ForEach(tags, id: \.self) { tag in
                                         Button(tag) { editor.addTag(tag) }.disabled(draft.quote.tags.contains(tag))
                                     }
-                                }.fixedSize().disabled(editor.availableTags.isEmpty)
+                                }.fixedSize().disabled(tags.isEmpty)
                             }
                         }
                         HStack {
-                            Text(editor.dirty ? "先保存修改，再预览这条笔记。" : "预览只展示这条笔记，不改变随机回顾计划。")
+                            Text(dirty ? "先保存修改，再预览这条笔记。" : "预览只展示这条笔记，不改变随机回顾计划。")
                                 .font(.caption).foregroundStyle(.secondary)
                             Spacer()
                             Button("预览这条", action: editor.previewSelected)
-                                .disabled(!editor.loaded || editor.dirty || !model.canRemind)
+                                .disabled(!editor.loaded || dirty || !model.canRemind)
                         }
                     } else {
                         Spacer()
-                        Text(editor.drafts.isEmpty ? "还没有笔记，点击“新增一条”开始。" : editor.filteredDrafts.isEmpty ? "没有匹配的笔记，试试其他关键词或标签。" : "从左侧选择一条笔记。")
+                        Text(editor.drafts.isEmpty ? "还没有笔记，点击“新增一条”开始。" : filtered.isEmpty ? "没有匹配的笔记，试试其他关键词或标签。" : "从左侧选择一条笔记。")
                             .foregroundStyle(.secondary).frame(maxWidth: .infinity)
                         Spacer()
                     }
@@ -711,12 +715,12 @@ struct ContentEditorView: View {
                 HStack {
                     if let failure = editor.failure {
                         Text(failure).foregroundStyle(.red).font(.callout)
-                    } else if editor.dirty {
+                    } else if dirty {
                         Text("有未保存的修改 · 切换笔记会保留草稿").foregroundStyle(.secondary).font(.callout)
                     } else if let message = editor.message {
                         Text(message).foregroundStyle(.secondary).font(.callout)
                     }
-                    if editor.loaded && editor.dirty {
+                    if editor.loaded && dirty {
                         Spacer()
                         Button("导出草稿", action: editor.exportDrafts).fixedSize()
                     }
@@ -758,7 +762,7 @@ struct ContentEditorView: View {
                     Spacer()
                     Button("保存并生效", action: { editor.save() })
                         .keyboardShortcut("s", modifiers: .command)
-                        .disabled(!editor.loaded || !editor.dirty)
+                        .disabled(!editor.loaded || !dirty)
                 }
             }.padding(16)
         }
