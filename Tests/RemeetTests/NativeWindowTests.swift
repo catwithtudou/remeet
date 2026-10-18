@@ -522,6 +522,7 @@ struct NativeWindowTests {
         #expect(editor.canUndoDelete && editor.dirty && editor.drafts[0].tagInput == "未提交")
         #expect(try Data(contentsOf: model.store.fileURL) == saved.fileData)
         editor.load()
+        #expect(editor.importFailure == nil) // Resolving the draft clears the stale import hint.
         let ids = editor.drafts.map(\.id)
         for invalid in ["[", #"[{"text":"新增"},{"text":null}]"#] {
             try Data(invalid.utf8).write(to: source)
@@ -877,6 +878,7 @@ struct NativeWindowTests {
         #expect(model.nextRecallDate == due)
         editor.drafts[0].tagInput = " 阅读 ，工作, 阅读,🌱 "
         #expect(editor.dirty)
+        #expect(editor.availableTags == ["工作"])
         editor.searchText = ""
         editor.tagFilter = .untagged
         editor.selectSearchResult()

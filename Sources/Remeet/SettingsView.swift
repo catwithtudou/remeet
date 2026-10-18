@@ -275,7 +275,8 @@ final class ContentEditorSession: ObservableObject {
     @Published private var deletedDrafts: [(draft: QuoteDraft, index: Int)] = []
     var canUndoDelete: Bool { !deletedDrafts.isEmpty }
     var availableTags: [String] {
-        Array(Set(drafts.flatMap { $0.quote.tags })).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+        // Committed tags only: half-typed input must not appear as a filter or reusable tag.
+        Array(Set(drafts.flatMap(\.tags))).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
     var selectedDraft: QuoteDraft? { drafts.first { $0.id == selectedID } }
     var filteredDrafts: [QuoteDraft] {
@@ -577,6 +578,7 @@ final class ContentEditorSession: ObservableObject {
         fileData = snapshot.fileData
         loaded = true
         failure = nil
+        importFailure = nil
     }
 }
 
@@ -663,7 +665,7 @@ struct ContentEditorView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
                                 Text("标签").font(.subheadline)
-                                if draft.tags.isEmpty { Text("默认（无标签）").font(.caption).foregroundStyle(.secondary) }
+                                if draft.quote.tags.isEmpty { Text("默认（无标签）").font(.caption).foregroundStyle(.secondary) }
                                 ScrollView(.horizontal) {
                                     HStack(spacing: 6) {
                                         ForEach(draft.tags, id: \.self) { tag in
