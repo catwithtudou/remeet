@@ -24,7 +24,7 @@ struct QuoteDraft: Identifiable, Equatable {
 }
 
 // Select the macOS 14 property wrapper explicitly; newer SDKs also export a State macro.
-private typealias EditorState<Value> = SwiftUI.State<Value>
+typealias EditorState<Value> = SwiftUI.State<Value> // Also used by SettingsView.
 
 @MainActor
 final class ContentEditorSession: ObservableObject {

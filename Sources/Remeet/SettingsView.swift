@@ -240,6 +240,3 @@ struct SettingsView: View {
         }
     }
 }
-
-// Select the macOS 14 property wrapper explicitly; newer SDKs also export a State macro.
-private typealias EditorState<Value> = SwiftUI.State<Value>
