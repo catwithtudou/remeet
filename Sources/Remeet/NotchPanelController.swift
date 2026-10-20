@@ -553,6 +553,14 @@ final class NotchPanelController {
         }, selector: #selector(DisplayLinkTarget.step(_:)))
         motionLink = link
         link.add(to: .main, forMode: .common)
+        // Finish on time even if the screen stops delivering frames, e.g. a display in standby.
+        let deadline = Timer(timeInterval: value.duration + 0.1, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.motionGeneration == token else { return }
+                self.advanceMotion(to: 1)
+            }
+        }
+        RunLoop.main.add(deadline, forMode: .common)
     }
 
     private func advanceMotion(to progress: Double) {
