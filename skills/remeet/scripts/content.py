@@ -247,6 +247,11 @@ def apply_plan(plan):
         backup = backup_dir / f'quotes-{stamp}-{uuid.uuid4().hex[:8]}.json'
         with backup.open('xb') as stream:
             stream.write(current)
+        # Keep the newest 10 like the app's editor-backups/, always including this one.
+        older = sorted((p for p in backup_dir.glob('quotes-*.json') if p.is_file() and p != backup),
+                       key=lambda p: p.stat().st_mtime, reverse=True)
+        for stale in older[9:]:
+            stale.unlink()
     # Recheck immediately before replace. The editor also checks its baseline on save.
     descriptor, temporary = tempfile.mkstemp(prefix='.remeet-import-', dir=target.parent)
     try:

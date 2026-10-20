@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 import plistlib
 from unittest.mock import patch
 from types import SimpleNamespace
@@ -105,6 +106,24 @@ class ContentSkillTests(unittest.TestCase):
         receipt = content.apply_plan(content.create_plan(self.incoming, self.target, 'merge'))
         self.assertEqual(receipt['status'], 'unchanged')
         self.assertEqual(len(list((self.target.parent / 'import-backups').iterdir())), 1)
+
+    def test_apply_keeps_the_newest_ten_import_backups_including_its_own(self):
+        self.seed([{'text': '旧'}])
+        backups = self.target.parent / 'import-backups'
+        backups.mkdir()
+        # Future timestamps: the new backup must survive even if the clock moved backwards.
+        for index in range(12):
+            old = backups / f'quotes-old-{index:02d}.json'
+            old.write_text('[]')
+            os.utime(old, (4_000_000_000 + index,) * 2)
+        (backups / 'notes.txt').write_text('不是备份')
+        receipt = content.apply_plan(content.create_plan(self.input([{'text': '新'}]), self.target, 'merge'))
+        kept = sorted(path.name for path in backups.glob('quotes-*.json'))
+        self.assertEqual(len(kept), 10)
+        self.assertIn(Path(receipt['backup']).name, kept)
+        self.assertEqual([name for name in kept if name.startswith('quotes-old-')],
+                         [f'quotes-old-{index:02d}.json' for index in range(3, 12)])
+        self.assertTrue((backups / 'notes.txt').exists())
 
     def test_stale_preview_and_changed_result_are_rejected(self):
         self.seed([{'text': '旧'}])
