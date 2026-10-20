@@ -53,7 +53,7 @@ REMEET_DATA_DIR="$PWD/build/qa-data" REMEET_DEFAULTS_SUITE=local.Remeet.qa \
 - DEBUG only: `--preview` and `--settings`, plus a "模拟定时触发" menu item.
 - Otherwise it runs as an accessory app with a status item.
 
-**Runtime wiring.** `AppDelegate` owns `RecallModel`, `UpdateController` and `ContentEditorSession` (in `SettingsView.swift`), and rebuilds the status menu in `menuNeedsUpdate`. `RecallModel` is the hub:
+**Runtime wiring.** `AppDelegate` owns `RecallModel`, `UpdateController` and `ContentEditorSession` (in `ContentEditor.swift`), and rebuilds the status menu in `menuNeedsUpdate`. `RecallModel` is the hub:
 - It combines `QuoteStore` (file), `PreferenceStore` (UserDefaults), `QuoteSelection` (random current entry), `ActivityGate` (sleep/screen sleep/session/lock reasons) and `RecallScheduler`.
 - It pushes state to `NotchPanelController` through `syncPanel()`.
 - `NotchPanelController` hosts the SwiftUI card in a non-activating `NSPanel` and drives `PresentationState`, a pure state machine for hover and reading deadlines that uses monotonic time.
