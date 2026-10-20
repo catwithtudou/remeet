@@ -277,6 +277,7 @@ final class NotchPanelController {
     private var timer: Timer?
     private var generation = 0
     private var motionLink: CADisplayLink?
+    private var motionDeadline: Timer?
     private var motionGeneration = 0
     private var transition: PanelTransition?
     private let reduceMotion: () -> Bool
@@ -560,6 +561,7 @@ final class NotchPanelController {
                 self.advanceMotion(to: 1)
             }
         }
+        motionDeadline = deadline
         RunLoop.main.add(deadline, forMode: .common)
     }
 
@@ -617,6 +619,8 @@ final class NotchPanelController {
         motionGeneration += 1
         motionLink?.invalidate()
         motionLink = nil
+        motionDeadline?.invalidate()
+        motionDeadline = nil
         transition = nil
     }
 
