@@ -75,6 +75,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         updater.onManualInstallReady = { [weak self] app in self?.showManualInstall(app) }
         model.start()
         updater.check()
+        // Tick hourly against wall-clock time, so sleep cannot stretch the daily check.
+        let updateTimer = Timer(timeInterval: 60 * 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updater.checkIfStale() }
+        }
+        updateTimer.tolerance = 5 * 60
+        RunLoop.main.add(updateTimer, forMode: .common)
         #if DEBUG
         if CommandLine.arguments.contains("--preview") { model.remindCurrent() }
         if CommandLine.arguments.contains("--settings") { showSettings() }

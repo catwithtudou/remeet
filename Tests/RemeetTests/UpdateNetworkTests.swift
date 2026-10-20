@@ -140,6 +140,46 @@ struct UpdateNetworkTests {
         }
     }
 
+    @Test @MainActor func dailyCheckRetriesFailuresAndKeepsAFoundUpdate() async throws {
+        let fixture = UpdateTests()
+        let root = try fixture.temporary()
+        let suite = testDefaultsSuite("local.Remeet.daily-check")
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let name = "Remeet-0.2.18-\(ReleaseUpdate.architecture).zip"
+        let base = "https://github.com/catwithtudou/remeet/releases"
+        let releases = try JSONSerialization.data(withJSONObject: [["tag_name": "v0.2.18", "html_url": "\(base)/tag/v0.2.18",
+            "draft": false, "prerelease": false, "assets": [name, name + ".sha256"].map {
+                ["name": $0, "size": 64, "state": "uploaded", "browser_download_url": "\(base)/download/v0.2.18/\($0)"]
+            }]])
+        let target = try fixture.app(root, name: "installed.app", version: "0.2.17")
+        let updater = UpdateController(bundle: try #require(Bundle(url: target)), defaults: defaults, client: client())
+        let start = Date(), hour: TimeInterval = 60 * 60
+        UpdateProtocol.respond = { _ in (403, Data()) }
+        updater.check(now: start) // The launch check is rate limited.
+        try await waitForOperation(updater)
+        #expect(updater.failure != nil && updater.available == nil)
+        UpdateProtocol.respond = { _ in (200, Data("[]".utf8)) }
+        updater.checkIfStale(now: start.addingTimeInterval(hour))
+        #expect(updater.busy) // A failed check is retried on the next hourly tick.
+        try await waitForOperation(updater)
+        #expect(updater.failure == nil && updater.available == nil)
+        updater.checkIfStale(now: start.addingTimeInterval(2 * hour))
+        #expect(!updater.busy) // A successful check holds for a day.
+        UpdateProtocol.respond = { _ in (200, releases) }
+        updater.checkIfStale(now: start.addingTimeInterval(-2 * 24 * hour))
+        #expect(updater.busy) // A clock moved back still gets its daily check.
+        try await waitForOperation(updater)
+        #expect(updater.available?.release.tagName == "v0.2.18" && updater.failure == nil)
+        UpdateProtocol.respond = { _ in (403, Data()) }
+        updater.checkIfStale(now: start.addingTimeInterval(3 * 24 * hour))
+        // A found update is kept rather than re-checked, so a background failure cannot hide it.
+        #expect(!updater.busy && updater.available?.release.tagName == "v0.2.18")
+    }
+
     @Test func failedOrTruncatedDownloadRemovesOnlyItsTemporaryDirectory() async throws {
         let name = "Remeet-0.2.18-arm64.zip"
         let checksum = Data((String(repeating: "a", count: 64) + "  " + name + "\n").utf8)

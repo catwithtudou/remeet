@@ -14,7 +14,7 @@
     <rect x="28" y="88" width="190" height="140" rx="12" fill="white" stroke="#d5e4da"/>
     <text x="44" y="116" class="step">1 · 菜单与回顾卡片</text>
     <text x="44" y="147" class="title">发现新版本</text>
-    <text x="44" y="174" class="body">启动时静默检查一次</text>
+    <text x="44" y="174" class="body">启动时及每天静默检查</text>
     <text x="44" y="197" class="body">测试版本需明确开启</text>
     <rect x="240" y="88" width="190" height="140" rx="12" fill="white" stroke="#d5e4da"/>
     <text x="256" y="116" class="step">2 · 下载更新</text>

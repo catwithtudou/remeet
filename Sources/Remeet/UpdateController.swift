@@ -21,6 +21,7 @@ final class UpdateController: ObservableObject {
     private let client: ReleaseClient
     private let appURL: URL
     private var operation: Task<Void, Never>?
+    private var lastCheck: Date?
     private var downloadDirectory: URL?
     private(set) var pendingInstallation: UpdateInstallation?
     private(set) var pendingManualInstall: URL?
@@ -97,7 +98,14 @@ final class UpdateController: ObservableObject {
         status = "更新通道已更改，请重新检查更新。"
     }
 
-    func check() {
+    /// Menu-bar sessions can run for weeks: check again once a day, keeping any update already found.
+    /// Only successful checks count, and a clock moved either way counts as a new day.
+    func checkIfStale(now: Date = Date()) {
+        guard available == nil, abs(now.timeIntervalSince(lastCheck ?? .distantPast)) >= 24 * 60 * 60 else { return }
+        check(now: now)
+    }
+
+    func check(now: Date = Date()) {
         guard !busy else { return }
         available = nil
         downloadedApp = nil
@@ -114,6 +122,7 @@ final class UpdateController: ObservableObject {
                 try Task.checkCancellation()
                 available = try ReleaseUpdate.select(releases, current: version, includePrereleases: includePrereleases,
                                                      development: development, architecture: ReleaseUpdate.architecture)
+                lastCheck = now // Failures leave this unset, so the next hourly tick retries.
                 if available != nil {
                     status = ""
                 } else if !includePrereleases && !releases.contains(where: { !$0.draft && !$0.isPrerelease && $0.version != nil }) {
