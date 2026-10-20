@@ -248,6 +248,14 @@ private struct PanelTransition {
     }
 }
 
+/// The display link retains its target; only this forwarder is retained, not the controller.
+@MainActor
+private final class DisplayLinkTarget: NSObject {
+    let action: (CADisplayLink) -> Void
+    init(_ action: @escaping (CADisplayLink) -> Void) { self.action = action }
+    @objc func step(_ link: CADisplayLink) { action(link) }
+}
+
 @MainActor
 final class NotchPanelController {
     private let panel = RecallPanel(contentRect: .zero,
@@ -268,7 +276,7 @@ final class NotchPanelController {
     private var state = PresentationState()
     private var timer: Timer?
     private var generation = 0
-    private var motionTimer: Timer?
+    private var motionLink: CADisplayLink?
     private var motionGeneration = 0
     private var transition: PanelTransition?
     private let reduceMotion: () -> Bool
@@ -505,7 +513,7 @@ final class NotchPanelController {
             return
         }
         cancelMotion()
-        guard animated, !reduceMotion(), panel.frame != frame else {
+        guard animated, !reduceMotion(), panel.frame != frame, let screen = currentScreen else {
             applyFrame(frame)
             setContentOpacity(expanded ? 1 : 0)
             container.bottomRadius = expanded ? 22 : 10
@@ -519,14 +527,16 @@ final class NotchPanelController {
         transition = value
         layoutContent()
         let token = motionGeneration
-        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, self.motionGeneration == token, let motion = self.transition else { return }
-                self.advanceMotion(to: (ProcessInfo.processInfo.systemUptime - motion.start) / motion.duration)
+        // Step at the panel screen's refresh rate (120 Hz on ProMotion), in sync with its frames.
+        let link = screen.displayLink(target: DisplayLinkTarget { [weak self] link in
+            guard let self, self.motionGeneration == token, let motion = self.transition else {
+                link.invalidate()
+                return
             }
-        }
-        motionTimer = timer
-        RunLoop.main.add(timer, forMode: .common)
+            self.advanceMotion(to: (ProcessInfo.processInfo.systemUptime - motion.start) / motion.duration)
+        }, selector: #selector(DisplayLinkTarget.step(_:)))
+        motionLink = link
+        link.add(to: .main, forMode: .common)
     }
 
     private func advanceMotion(to progress: Double) {
@@ -581,8 +591,8 @@ final class NotchPanelController {
 
     private func cancelMotion() {
         motionGeneration += 1
-        motionTimer?.invalidate()
-        motionTimer = nil
+        motionLink?.invalidate()
+        motionLink = nil
         transition = nil
     }
 
