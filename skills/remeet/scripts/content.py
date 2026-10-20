@@ -247,11 +247,6 @@ def apply_plan(plan):
         backup = backup_dir / f'quotes-{stamp}-{uuid.uuid4().hex[:8]}.json'
         with backup.open('xb') as stream:
             stream.write(current)
-        # Keep the newest 10 like the app's editor-backups/, always including this one.
-        older = sorted((p for p in backup_dir.glob('quotes-*.json') if p.is_file() and p != backup),
-                       key=lambda p: p.stat().st_mtime, reverse=True)
-        for stale in older[9:]:
-            stale.unlink()
     # Recheck immediately before replace. The editor also checks its baseline on save.
     descriptor, temporary = tempfile.mkstemp(prefix='.remeet-import-', dir=target.parent)
     try:
@@ -266,6 +261,16 @@ def apply_plan(plan):
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
+    if backup is not None:
+        # Keep the newest 10 like the app's editor-backups/, always including this one. Only after
+        # a successful write, so a rejected apply never costs an older backup; best effort.
+        try:
+            older = sorted((p for p in backup.parent.glob('quotes-*.json') if p.is_file() and p != backup),
+                           key=lambda p: p.stat().st_mtime, reverse=True)
+            for stale in older[9:]:
+                stale.unlink(missing_ok=True)
+        except OSError:
+            pass
     return {'status': 'written', 'target': str(target), 'count': len(result), 'backup': str(backup) if backup else None, 'sha256': digest(target.read_bytes())}
 
 

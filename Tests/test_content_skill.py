@@ -117,7 +117,11 @@ class ContentSkillTests(unittest.TestCase):
             old.write_text('[]')
             os.utime(old, (4_000_000_000 + index,) * 2)
         (backups / 'notes.txt').write_text('不是备份')
-        receipt = content.apply_plan(content.create_plan(self.input([{'text': '新'}]), self.target, 'merge'))
+        plan = content.create_plan(self.input([{'text': '新'}]), self.target, 'merge')
+        with patch.object(content.os, 'replace', side_effect=OSError('写入失败')), self.assertRaises(OSError):
+            content.apply_plan(plan)
+        self.assertEqual(len(list(backups.glob('quotes-old-*.json'))), 12)  # A failed apply keeps every old backup.
+        receipt = content.apply_plan(plan)
         kept = sorted(path.name for path in backups.glob('quotes-*.json'))
         self.assertEqual(len(kept), 10)
         self.assertIn(Path(receipt['backup']).name, kept)
