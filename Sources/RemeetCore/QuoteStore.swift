@@ -100,6 +100,9 @@ public final class QuoteStore {
 public struct QuoteSelection {
     public private(set) var current: Quote?
     private let randomIndex: (Range<Int>) -> Int
+    // Texts drawn this round: every entry comes up once before any repeats.
+    // The round lives in memory only, so a relaunch starts a new one.
+    private var drawn: Set<String> = []
 
     public init(randomIndex: @escaping (Range<Int>) -> Int = { Int.random(in: $0) }) {
         self.randomIndex = randomIndex
@@ -112,9 +115,16 @@ public struct QuoteSelection {
     }
 
     public mutating func selectNext(from quotes: [Quote]) {
-        let candidates = quotes.count > 1 ? quotes.filter { $0.text != current?.text } : quotes
+        let others = quotes.count > 1 ? quotes.filter { $0.text != current?.text } : quotes
+        var candidates = others.filter { !drawn.contains($0.text) }
+        if candidates.isEmpty {
+            drawn = []
+            candidates = others
+        }
         guard !candidates.isEmpty else { current = nil; return }
-        current = candidates[randomIndex(candidates.indices)]
+        let next = candidates[randomIndex(candidates.indices)]
+        current = next
+        drawn.insert(next.text)
     }
 }
 

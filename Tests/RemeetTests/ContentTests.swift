@@ -107,12 +107,28 @@ func rejectsEntireInvalidFile(input: String) {
     selection.selectNext(from: quotes)
     #expect(selection.current?.text == "B")
     selection.selectNext(from: quotes)
-    #expect(selection.current?.text == "A")
+    #expect(selection.current?.text == "C") // A was already drawn this round.
     selection.reconcile(with: [Quote(text: "只有一条")])
     selection.selectNext(from: [Quote(text: "只有一条")])
     #expect(selection.current?.text == "只有一条")
     selection.reconcile(with: [])
     #expect(selection.current == nil)
+}
+
+@Test func selectionShowsEveryEntryOncePerRoundIncludingNewOnes() {
+    var selection = QuoteSelection(randomIndex: { $0.lowerBound })
+    let quotes = (1...5).map { Quote(text: "笔记 \($0)") }
+    func draw(_ count: Int, from pool: [Quote]) -> [String] {
+        (0..<count).compactMap { _ in selection.selectNext(from: pool); return selection.current?.text }
+    }
+    #expect(Set(draw(5, from: quotes)) == Set(quotes.map(\.text)))
+    let last = selection.current?.text
+    // The next round starts over without repeating the entry just shown.
+    let round = draw(2, from: quotes)
+    #expect(round.first != last && Set(round).count == 2)
+    // An entry added mid-round comes up before anything repeats.
+    let added = quotes + [Quote(text: "新笔记")]
+    #expect(Set(round + draw(4, from: added)) == Set(added.map(\.text)))
 }
 
 @Test func preferencesPersistAndInvalidValuesFallBack() throws {
