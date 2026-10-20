@@ -74,6 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         updater.onQuitForInstallation = { NSApp.terminate(nil) }
         updater.onManualInstallReady = { [weak self] app in self?.showManualInstall(app) }
         model.start()
+        model.panel.prewarm()
         updater.check()
         // Tick hourly against wall-clock time, so sleep cannot stretch the daily check.
         let updateTimer = Timer(timeInterval: 60 * 60, repeats: true) { [weak self] _ in

@@ -373,6 +373,22 @@ final class NotchPanelController {
 
     func collapse(immediately: Bool = false) { state.collapse(); render(animated: !immediately) }
 
+    /// The process's first SwiftUI render (framework, fonts, symbols) costs tens of ms.
+    /// Pay it offscreen at launch instead of in the first frames of the first expansion.
+    func prewarm() {
+        let views: [NSView] = [
+            NSHostingView(rootView: QuoteCard(quote: Quote(text: "回见", source: "回见"),
+                                              textHeight: 40, fontSize: fontSize, sourceSize: 11)),
+            NSHostingView(rootView: RecallHeaderStatus()),
+            NSHostingView(rootView: RecallHeaderActions(next: {}, collapse: {}, openSettings: {}))]
+        for view in views {
+            view.frame = NSRect(x: 0, y: 0, width: 200, height: 100)
+            if let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                view.cacheDisplay(in: view.bounds, to: bitmap)
+            }
+        }
+    }
+
     private var geometry: NotchGeometry {
         NotchGeometry(anchor: anchor, width: hotWidth, depth: connectionHeight)
     }

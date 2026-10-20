@@ -1004,6 +1004,10 @@ struct NativeWindowTests {
         defer { panel.shutdown() }
         panel.configure(quote: Quote(text: "中文 🌱\n第二行", source: "示例"),
                         active: true, hoverEnabled: true, showIndicator: false, screen: "auto")
+        let collapsed = panel.windowFrame
+        // Prewarming renders offscreen only; the panel stays collapsed and unchanged.
+        panel.prewarm()
+        #expect(panel.windowFrame == collapsed && !panel.isPresented && panel.headerFrames.isEmpty)
         #expect(panel.windowFrame.height == 8)
         #expect(panel.hostedFrame == nil)
         panel.present(duration: 10)
