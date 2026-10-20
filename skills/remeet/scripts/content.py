@@ -258,6 +258,11 @@ def apply_plan(plan):
         if digest(latest) != plan['base_sha256']:
             raise ValueError('目标在写入前发生变化；请重新生成计划')
         os.replace(temporary, target)
+    except BaseException:
+        # Nothing was written: drop the redundant backup, unless the target no longer holds those bytes.
+        if backup is not None and (target.read_bytes() if target.exists() else None) == current:
+            backup.unlink(missing_ok=True)
+        raise
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
@@ -267,10 +272,13 @@ def apply_plan(plan):
         try:
             older = sorted((p for p in backup.parent.glob('quotes-*.json') if p.is_file() and p != backup),
                            key=lambda p: p.stat().st_mtime, reverse=True)
-            for stale in older[9:]:
-                stale.unlink(missing_ok=True)
         except OSError:
-            pass
+            older = []
+        for stale in older[9:]:
+            try:
+                stale.unlink()
+            except OSError:
+                pass  # A locked or vanished file only means one extra backup stays.
     return {'status': 'written', 'target': str(target), 'count': len(result), 'backup': str(backup) if backup else None, 'sha256': digest(target.read_bytes())}
 
 

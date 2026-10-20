@@ -118,9 +118,18 @@ class ContentSkillTests(unittest.TestCase):
             os.utime(old, (4_000_000_000 + index,) * 2)
         (backups / 'notes.txt').write_text('不是备份')
         plan = content.create_plan(self.input([{'text': '新'}]), self.target, 'merge')
+        # A failed write keeps every old backup and leaves no redundant copy of the unchanged target.
         with patch.object(content.os, 'replace', side_effect=OSError('写入失败')), self.assertRaises(OSError):
             content.apply_plan(plan)
-        self.assertEqual(len(list(backups.glob('quotes-old-*.json'))), 12)  # A failed apply keeps every old backup.
+        self.assertEqual(len(list(backups.glob('quotes-*.json'))), 12)
+        # A target changed during apply keeps the backup: it may be the only copy of those bytes.
+        original = self.target.read_bytes()
+        with patch.object(content.os, 'fsync', side_effect=lambda _: self.seed([{'text': '外部改动'}])), \
+                self.assertRaises(ValueError):
+            content.apply_plan(plan)
+        kept_on_conflict = [path for path in backups.glob('quotes-*.json') if not path.name.startswith('quotes-old-')]
+        self.assertEqual([path.read_bytes() for path in kept_on_conflict], [original])
+        self.target.write_bytes(original)
         receipt = content.apply_plan(plan)
         kept = sorted(path.name for path in backups.glob('quotes-*.json'))
         self.assertEqual(len(kept), 10)
