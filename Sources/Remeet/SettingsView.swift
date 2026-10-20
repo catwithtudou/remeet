@@ -242,7 +242,7 @@ struct SettingsView: View {
     }
 }
 
-struct QuoteDraft: Identifiable {
+struct QuoteDraft: Identifiable, Equatable {
     let id = UUID()
     var text: String
     var source: String
@@ -635,15 +635,7 @@ struct ContentEditorView: View {
                     }.padding(.horizontal, 12).accessibilityLabel("按标签筛选")
                     List(selection: $editor.selectedID) {
                         ForEach(filtered) { draft in
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "新笔记" : draft.text)
-                                    .lineLimit(2)
-                                if !draft.source.isEmpty {
-                                    Text(draft.source).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                }
-                                Text(draft.quote.tags.isEmpty ? "默认" : draft.quote.tags.map { "#\($0)" }.joined(separator: "  "))
-                                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                            }.padding(.vertical, 5).tag(draft.id)
+                            DraftRow(draft: draft).equatable().tag(draft.id)
                         }
                     }.listStyle(.sidebar)
                     Text("\(filtered.count) / \(editor.drafts.count) 条")
@@ -830,6 +822,23 @@ struct ContentEditorView: View {
             Button("取消", role: .cancel) { }
             Button("重新载入", role: .destructive) { editor.load() }
         }
+    }
+}
+
+/// Equatable so a keystroke re-renders only the edited row instead of every row in the list.
+private struct DraftRow: View, Equatable {
+    let draft: QuoteDraft
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "新笔记" : draft.text)
+                .lineLimit(2)
+            if !draft.source.isEmpty {
+                Text(draft.source).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Text(draft.quote.tags.isEmpty ? "默认" : draft.quote.tags.map { "#\($0)" }.joined(separator: "  "))
+                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        }.padding(.vertical, 5)
     }
 }
 
